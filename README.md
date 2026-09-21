@@ -28,7 +28,7 @@ M1: P0 ステップ1
 
 | Ph | 内容 | ステップ | 状態 | プロジェクト | 出力先 |
 |---|---|---|---|---|---|
-| P0 | 基礎 / アーキテクチャ / 用語 | 6 | 進行中 **3/6** | — | `docs/p0-foundations.md` |
+| P0 | 基礎 / アーキテクチャ / 用語 | 6 | 進行中 **4/6** | — | `docs/p0-foundations.md` |
 | P1 | コンテナとは / CLI 基礎 | 5 | 未着手 0/5 | — | `docs/p1-container-basics.md` |
 | P2 | Dockerfile / レイヤ | 5 | 未着手 0/5 | PJ1 | `docs/p2-dockerfile.md` |
 | P3 | 永続化 / ネットワーク | 4 | 未着手 0/4 | — | `docs/p3-storage-network.md` |
