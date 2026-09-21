@@ -30,7 +30,7 @@ M1: P0 ステップ1
 |---|---|---|---|---|---|
 | P0 | 基礎 / アーキテクチャ / 用語 | 6 | ✅ **修了 6/6** | — | `docs/p0-foundations.md` |
 | P1 | コンテナとは / CLI 基礎 | 5 | ✅ **修了 5/5 + M2** | — | `docs/p1-container-basics.md` |
-| P2 | Dockerfile / レイヤ | 5 | 進行中 **3/5** | PJ1 | `docs/p2-dockerfile.md` |
+| P2 | Dockerfile / レイヤ | 5 | 進行中 **4/5** | PJ1 | `docs/p2-dockerfile.md` |
 | P3 | 永続化 / ネットワーク | 4 | 未着手 0/4 | — | `docs/p3-storage-network.md` |
 | P4 | Docker Compose | 6 | 未着手 0/6 | PJ2 | `docs/p4-compose.md` |
 | P5 | 最適化 / セキュリティ | 5 | 未着手 0/5 | PJ3 | `docs/p5-optimize.md` |

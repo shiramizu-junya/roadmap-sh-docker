@@ -54,6 +54,9 @@ FROM python:3.12-slim
 #   WORKDIR は以降ずっと効き続ける。
 WORKDIR /app
 
+COPY requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
 
 # ------------------------------------------------------------
 # COPY — 手元のファイルをイメージの中に写す
@@ -114,4 +117,4 @@ COPY app/ .
 # ★ いまは動作確認用の仮の内容
 #   main.py を読み込めるかだけを確かめている。
 #   P2-3 で fastapi を入れたあと、uvicorn でサーバを起動する形に変える。
-CMD ["python", "-c", "import main; print('読み込めました')"]
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

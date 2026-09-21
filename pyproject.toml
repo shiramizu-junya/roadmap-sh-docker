@@ -7,6 +7,7 @@ description = "Docker 学習用の題材アプリ（docs/00-plan.md §3.1）"
 requires-python = "==3.12.*"
 dependencies = [
     "fastapi>=0.141.1",
+    "uvicorn>=0.53.0",
 ]
 
 # このリポジトリはパッケージではなく、教材と題材アプリの置き場所。
