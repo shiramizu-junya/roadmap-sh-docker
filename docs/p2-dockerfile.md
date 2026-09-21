@@ -1700,4 +1700,274 @@ docker rm -f p-shell p-exec e1 e2 e3
 
 **❓ 次の問い**: 型は自分で作れるようになった。**では、その型を使って「動くもの」を最後まで自力で組めるか。**
 
-▶ **次**: `MP: PJ1` — **Basic Dockerfile**（P2 で学んだ5つを全部使う。要件だけ渡すので、自力で組む）
+▶ **次**: `MP: PJ1`（下へ続く）
+
+---
+
+# MP: PJ1 — Basic Dockerfile
+
+**出典**: https://roadmap.sh/projects/basic-dockerfile （beginner）
+
+**❓ この回の問い**: P2 で5つのことを学んだ。→ **では、要件だけ渡されたとき、自力で最後まで組めるか？**
+
+> **この回は解答を先に読まない。** 判定基準を見て、自分で組んで、コマンドの出力で合否を確かめる。
+> 解答例は末尾の折りたたみにある。**開くのは、自分で組んでから。**
+
+---
+
+## 1. 要件
+
+**課題は2つある。A が出典の課題、B がこの教材の本題。**
+
+### 課題A: 出典どおりのもの（最低ライン）
+
+コンテナを動かすと **`Hello, Captain!`** と表示して終了するイメージを作る。
+
+- ベースイメージは **Alpine Linux** を使う
+- 表示は**1つの命令**で行う
+- **任意課題**: 名前を差し替えられるようにする。`docker run <イメージ> Junya!` と打つと `Hello, Junya!` になる
+
+### 課題B: 本題（自分のアプリのイメージ化）
+
+`app/main.py`（P2-2 で書いた FastAPI アプリ）を、**そのまま動くイメージ**にする。
+
+- ポートを指定して起動できること
+- `docker stop` で**すぐ止まる**こと
+- コードを直したとき、**依存のインストールが走り直さない**こと
+
+> 🔄 **素材からの変更**
+>
+> | 出典 | この教材 |
+> | --- | --- |
+> | Node.js のアプリ | **FastAPI（Python 3.12）** |
+> | `package.json` | **`requirements.txt`** |
+> | `npm install` | **`pip install`** |
+> | `node server.js` | **`uvicorn main:app`** |
+>
+> **課題B は出典には無い。** 出典の課題Aは `FROM` と1命令だけで解けてしまい、P2 で学んだ5つのうち1つしか使わないため、本題を足した（`docs/00-plan.md` §6.1）。
+
+> 🔓 **教材用の簡略化**: 出典は `alpine:latest` を指定しているが、**この教材では版を固定する**（例: `alpine:3.22`）。
+> **`latest` は「そのとき最新のもの」という意味で、中身が変わる。** 半年後に同じ Dockerfile をビルドすると別のものができてしまう。
+> **本番では**必ず版を固定する。
+> 根拠: https://docs.docker.com/build/building/best-practices/
+
+---
+
+## 2. このフェーズで学んだどれを使うか
+
+| P2 の回 | 学んだこと | 課題A | 課題B |
+| --- | --- | --- | --- |
+| **P2-1** | `FROM` と `CMD`、`docker build -t` | ⭕ 使う | ⭕ 使う |
+| **P2-2** | `COPY` / `WORKDIR` / `.dockerignore` | **✗ 不要**（コピーするものが無い） | ⭕ 使う |
+| **P2-3** | `RUN` で依存を入れる、層になる | **✗ 不要**（依存が無い） | ⭕ 使う |
+| **P2-4** | 書く順序でキャッシュの効きが変わる | **✗ 不要**（1命令だけ） | ⭕ 使う |
+| **P2-5** | `ENTRYPOINT` / `EXPOSE` / exec 形式 | ⭕ 任意課題で使う | ⭕ 使う |
+
+**課題A で使うのは P2-1 と P2-5 だけ。** これが「出典のままでは軽すぎる」と判断した理由。
+
+---
+
+## 3. 判定基準
+
+**すべてコマンドの出力で確かめられる。** 講評は要らない。
+
+### 課題A
+
+| # | 打つコマンド | 合格の条件 |
+| --- | --- | --- |
+| A-1 | `docker run --rm <イメージ>` | **`Hello, Captain!`** と出る |
+| A-2 | `docker run --rm <イメージ> Junya!` | **`Hello, Junya!`** と出る（任意課題）|
+| A-3 | `docker images <イメージ> --format '{{.Size}}'` | **20MB 未満** |
+| A-4 | `grep FROM Dockerfile` | **`latest` を使っていない**（版が固定されている）|
+
+### 課題B
+
+| # | 打つコマンド | 合格の条件 |
+| --- | --- | --- |
+| B-1 | `curl http://localhost:9990/health` | **`{"status":"ok"}`** が返る（`-p 9990:8000` で起動した場合）|
+| B-2 | `docker exec <名前> cat /proc/1/comm` | **`uvicorn`** と出る（`sh` ではない）|
+| B-3 | `docker stop <名前>` の所要時間 | **1秒未満**（10秒待たされない）|
+| B-4 | `docker inspect <名前> --format '{{.State.ExitCode}}'` | **`0`**（`137` ではない）|
+| B-5 | `app/main.py` を1行変えて再ビルド | **3秒未満**で終わり、`pip install` が **`CACHED`** |
+
+**B-3 と B-5 が、この課題の山場。** 動くだけなら誰でもできるが、**この2つは書き方を知らないと通らない**。
+
+> 💡 **時間の測り方**: `time docker stop <名前>` と打つと、かかった秒数が出る。
+
+---
+
+## 4. 詰まったときの確認順
+
+**推測しない。上から順に打つ。** どの層で止まっているかが必ず分かる。
+
+| 順 | 打つコマンド | 分かること |
+| --- | --- | --- |
+| **1** | `docker ps -a` | **そもそも起動したか**。`Exited` なら落ちている。`Created` なら起動に失敗している |
+| **2** | `docker logs <名前>` | **何を言い残したか**。落ちた理由はたいていここに書いてある |
+| **3** | `docker inspect <名前> --format '{{.Config.Cmd}} {{.Config.Entrypoint}}'` | **起動コマンドが意図どおりか**。書き間違いがここで見つかる |
+| **4** | `docker run --rm <イメージ> ls -la` | **ファイルが入っているか**。`CMD` を上書きして中を覗く |
+| **5** | `docker exec <名前> cat /proc/1/comm` | **PID 1 が誰か**。`sh` なら P2-5 の問題 |
+
+**よくある詰まり方と、それがどの段で見つかるか**
+
+| 症状 | 見つかる段 | 原因 |
+| --- | --- | --- |
+| すぐ `Exited` になる | 1 → 2 | 起動コマンドの書き間違い、依存不足 |
+| `curl` がつながらない | 1（`PORTS` 欄） | `-p` の付け忘れ、または `--host 0.0.0.0` の書き忘れ |
+| `docker stop` が10秒 | 5 | `CMD` をシェル形式で書いている |
+| 毎回 `pip install` が走る | — | `COPY app/` を `RUN` より上に書いている |
+
+---
+
+## 5. ヒント
+
+**設定ファイルの中身は書かない。考え方だけ。**
+
+**課題A について**
+
+- 「表示して終了する」なら、待ち続ける必要はない。P1-1 で `nginx` が終わらなかった理由を思い出す
+- 任意課題（名前の差し替え）は、**変えない部分と変える部分を分ける**と解ける。P2-5 でやった
+- Alpine の版は [Docker Hub の alpine](https://hub.docker.com/_/alpine) で確認できる
+
+**課題B について**
+
+- 必要な行は **P2-5 までに全部出てきている**。新しい命令は要らない
+- 書く順序は P2-4 の原則どおり。**変わりにくいものを上に**
+- `docker stop` を速くしたいなら、**PID 1 を誰にするか**を考える（P2-5）
+- `requirements.txt` は手で書かない。`uv export` で書き出す（P2-3）
+
+**詰まったら**
+
+- **4章の確認順を上から打つ。** 推測で直そうとしない
+- どうしても分からない行があれば、**その行を扱った回の 🔬 仕組み解剖だけ**読み返す
+
+---
+
+<details><summary>解答例（自力で組んでから開く）</summary>
+
+### 課題A
+
+**ファイル**: 任意のディレクトリに `Dockerfile`
+
+```dockerfile
+FROM alpine:3.22
+
+ENTRYPOINT ["echo", "Hello,"]
+CMD ["Captain!"]
+```
+
+```bash
+docker build -t pj1:hello .
+docker run --rm pj1:hello
+docker run --rm pj1:hello "Junya!"
+docker images pj1:hello --format '{{.Size}}'
+```
+
+```
+Hello, Captain!
+Hello, Junya!
+13.3MB
+```
+
+✅ 検証済み: Docker Desktop 4.81.0 / alpine:3.22
+
+**考え方**: `ENTRYPOINT` に「変えない部分」（`echo Hello,`）、`CMD` に「差し替えたい部分」（`Captain!`）を置く。うしろに引数を書くと `CMD` だけが入れ替わるので、任意課題も同時に解ける（P2-5）。
+
+**`echo` は出力したら終わる**ので、コンテナもすぐ終了する。待ち続ける必要がない（P1-1）。
+
+---
+
+### 課題B
+
+**ファイル**: リポジトリのルートの `Dockerfile`
+
+```dockerfile
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ .
+
+EXPOSE 8000
+
+ENTRYPOINT ["uvicorn", "main:app", "--host", "0.0.0.0"]
+CMD ["--port", "8000"]
+```
+
+**判定基準の確認**
+
+```bash
+docker build -t pj1:app .
+docker run -d --name pj1t -p 9990:8000 pj1:app
+curl http://localhost:9990/health
+docker exec pj1t cat /proc/1/comm
+time docker stop pj1t
+docker inspect pj1t --format '{{.State.ExitCode}}'
+docker images pj1:app --format '{{.Size}}'
+```
+
+```
+{"status":"ok"}
+uvicorn
+0.4 秒
+0
+238MB
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**キャッシュの確認**（`app/main.py` を1行変えてから）
+
+```bash
+docker build -t pj1:app .
+```
+
+```
+#8 CACHED          ← pip install は走らなかった
+所要: 2.4 秒
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**なぜこの形なのか**
+
+| 行 | 理由 |
+| --- | --- |
+| `COPY requirements.txt` を先、`COPY app/` を後 | **P2-4**。コードを直しても `pip install` が走らない |
+| `ENTRYPOINT` を配列（exec 形式）で書く | **P2-5**。`uvicorn` が PID 1 になり、`docker stop` が 0.4秒で終わる |
+| `--host 0.0.0.0` | **P2-3**。既定の `127.0.0.1` では、コンテナの外から届かない |
+| `EXPOSE 8000` | **P2-5**。穴は開かないが、読む人と道具のために書く |
+| `CMD ["--port", "8000"]` | **P2-5**。既定のポート。`docker run ... --port 9000` で差し替えられる |
+
+**書かなくても動くが、書いたほうがよいもの**
+
+- `EXPOSE` — 無くても `-p` があれば動く。だが **Dockerfile を読む人が困る**
+- `.dockerignore` — 今回は `COPY app/` と絞っているので効果は小さい。だが `COPY .` に変えた瞬間に効いてくる
+
+</details>
+
+---
+
+## 6. 終わったら記録する
+
+`projects/pj1-basic-dockerfile/README.md` に、次を書き残す。
+
+- **要件**（この章の1をそのまま貼ってよい）
+- **判定基準**（3章のチェックを ✅ で埋める）
+- **詰まった記録** — これがいちばん価値がある
+
+| 症状 | 切り分けに使ったコマンド | 原因 |
+| --- | --- | --- |
+| （例）`docker stop` が10秒 | `docker exec ... cat /proc/1/comm` → `sh` | `CMD` をシェル形式で書いていた |
+
+**詰まらなかったなら「詰まらなかった」と書く。** それも記録。
+P3 以降で似た症状が出たとき、**ここを見返すのがいちばん速い**。
+
+---
+
+**❓ 次の問い**: イメージは作れた。`docker stop` も速い。**だが、このアプリにはまだデータが無い。** P1-5 で「コンテナに書いたものは消える」と学んだ。**データベースをつなぐなら、そのデータはどこに置けばいいのか。**
+
+▶ **次**: `M2: P2` — **フェーズ末パック**（ブランクページ再現と宿題。今回は Dockerfile を白紙から再現する）

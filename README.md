@@ -30,7 +30,7 @@ M1: P0 ステップ1
 |---|---|---|---|---|---|
 | P0 | 基礎 / アーキテクチャ / 用語 | 6 | ✅ **修了 6/6** | — | `docs/p0-foundations.md` |
 | P1 | コンテナとは / CLI 基礎 | 5 | ✅ **修了 5/5 + M2** | — | `docs/p1-container-basics.md` |
-| P2 | Dockerfile / レイヤ | 5 | ✅ **修了 5/5** | PJ1 | `docs/p2-dockerfile.md` |
+| P2 | Dockerfile / レイヤ | 5 | ✅ **修了 5/5 + PJ1** | PJ1 | `docs/p2-dockerfile.md` |
 | P3 | 永続化 / ネットワーク | 4 | 未着手 0/4 | — | `docs/p3-storage-network.md` |
 | P4 | Docker Compose | 6 | 未着手 0/6 | PJ2 | `docs/p4-compose.md` |
 | P5 | 最適化 / セキュリティ | 5 | 未着手 0/5 | PJ3 | `docs/p5-optimize.md` |
@@ -49,7 +49,7 @@ P0 だけは M2 を付けない（再現すべき設定ファイルがまだ無�
 
 | PJ | 名前 | いつ | 前提が揃う理由 | 状態 |
 |---|---|---|---|---|
-| PJ1 | Basic Dockerfile | P2-5 の直後 | 任意課題に `ENTRYPOINT`+`CMD` が要る | 未着手 |
+| PJ1 | Basic Dockerfile | P2-5 の直後 | 任意課題に `ENTRYPOINT`+`CMD` が要る | **出題済み** |
 | PJ2 | Multi-Container Application | P4-6 の直後 | volume・network（P3）+ compose（P4）が要る | 未着手 |
 | PJ3 | Multi-Service Application | P5-5 の直後 | マルチステージ・非root・secrets・healthcheck が要る | 未着手 |
 | PJ4 | Dockerized Service Deployment | P6-5 の直後（任意） | push・CI・リモート実行が要る | 未着手 |
