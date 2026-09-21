@@ -1,0 +1,15 @@
+[project]
+name = "roadmap-sh-docker"
+version = "0.1.0"
+description = "Docker 学習用の題材アプリ（docs/00-plan.md §3.1）"
+# Dockerfile の FROM python:3.12-slim と版をそろえる。
+# ここがずれると「手元では動くのにコンテナで動かない」が起きる。
+requires-python = "==3.12.*"
+dependencies = [
+    "fastapi>=0.141.1",
+]
+
+# このリポジトリはパッケージではなく、教材と題材アプリの置き場所。
+# インストール対象にしないため build-system は置かない。
+[tool.uv]
+package = false

@@ -1,3 +1,9 @@
 .DS_Store
 .env
 *.log
+
+# Python（uv が作るもの）
+# .venv は環境ごとに作り直すもの。uv.lock があれば uv sync で再現できる
+.venv/
+__pycache__/
+*.pyc
