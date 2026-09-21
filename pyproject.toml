@@ -13,3 +13,10 @@ dependencies = [
 # インストール対象にしないため build-system は置かない。
 [tool.uv]
 package = false
+
+# エディタの型チェック（pyright）に .venv を見させる。
+# これが無いと pyright は PATH 上の python（uv のグローバル 3.14）を見てしまい、
+# 「インポート fastapi を解決できませんでした」と出る。
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
