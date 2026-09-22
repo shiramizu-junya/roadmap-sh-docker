@@ -1953,7 +1953,7 @@ docker build -t pj1:app .
 
 ## 6. 終わったら記録する
 
-`projects/pj1-basic-dockerfile/README.md` に、次を書き残す。
+`projects/basic-dockerfile/README.md` に、次を書き残す。
 
 - **要件**（この章の1をそのまま貼ってよい）
 - **判定基準**（3章のチェックを ✅ で埋める）

@@ -98,11 +98,17 @@ roadmap-sh-docker/
 │   ├── p6-cicd.md               P6 の全ステップ + MP(PJ4) + M2 パック（任意）
 │   └── 99-uncovered.md          M3 の出力
 └── projects/
-    ├── pj1-basic-dockerfile/    README.md（要件・判定基準・詰まった記録）+ 成果物
-    ├── pj2-multi-container/
-    ├── pj3-multi-service/
-    └── pj4-cicd-deploy/         任意
+    ├── basic-dockerfile/    README.md（要件・判定基準・詰まった記録）+ 成果物
+    ├── multi-container-service/
+    ├── multiservice-docker/
+    └── dockerized-service-deployment/         任意
 ```
+
+**`projects/` は roadmap.sh に提出するもの専用**（2026-09-22 決定）。
+- ディレクトリ名は **roadmap.sh の URL の末尾（slug）と同じ**にする（例: `roadmap.sh/projects/basic-dockerfile` → `projects/basic-dockerfile/`）
+- 各ディレクトリは**自己完結**させる（その中だけで `docker build` が通る）。サブディレクトリの URL で提出できなくても、切り出すだけで独立リポジトリにできる
+- 教材が独自に足した課題（PJ1 の課題B など）は `projects/` に置かず、リポジトリのルート（`app/` と `Dockerfile`）で育てる
+- 構成は `roadmap-sh-django-projects` と揃えてある
 
 `projects/*/README.md` は雛形が作成済み。MP モードの出力を「要件」「判定基準」に貼り、詰まった箇所は必ず「詰まった記録」表に残す（到達点4の素材になる）。
 
@@ -380,18 +386,18 @@ PJ1〜PJ4 の出典ページを取得して要件を確認した（2026-09-21 / 
 | 4–8 | `M1: P1 ステップ1` 〜 `5` | `docs/p1-container-basics.md` |
 | 9 | `M2: P1` | 同上（ブランクページ再現 + 宿題 Lv1〜3）|
 | 10–14 | `M1: P2 ステップ1` 〜 `5` | `docs/p2-dockerfile.md` / `app/` / `Dockerfile` |
-| 15 | **`MP: PJ1`** | `projects/pj1-basic-dockerfile/` |
+| 15 | **`MP: PJ1`** | `projects/basic-dockerfile/` |
 | 16 | `M2: P2` | `docs/p2-dockerfile.md`（宿題は Lv1・Lv2 のみ）|
 | 17–20 | `M1: P3 ステップ1` 〜 `4` | `docs/p3-storage-network.md` |
 | 21 | `M2: P3` | 同上（Lv1〜3）|
 | 22–27 | `M1: P4 ステップ1` 〜 `6` | `docs/p4-compose.md` / `compose.yaml` |
-| 28 | **`MP: PJ2`** | `projects/pj2-multi-container/` |
+| 28 | **`MP: PJ2`** | `projects/multi-container-service/` |
 | 29 | `M2: P4` | `docs/p4-compose.md`（Lv1・Lv2）|
 | 30–34 | `M1: P5 ステップ1` 〜 `5` | `docs/p5-optimize.md` |
-| 35 | **`MP: PJ3`** | `projects/pj3-multi-service/` |
+| 35 | **`MP: PJ3`** | `projects/multiservice-docker/` |
 | 36 | `M2: P5` | `docs/p5-optimize.md`（Lv1・Lv2）|
 | 37–41 | `M1: P6 ステップ1` 〜 `5`（**任意**）| `docs/p6-cicd.md` |
-| 42 | **`MP: PJ4`**（任意）| `projects/pj4-cicd-deploy/` |
+| 42 | **`MP: PJ4`**（任意）| `projects/dockerized-service-deployment/` |
 | 43 | `M2: P6`（任意）→ 最後に `M3` | `docs/p6-cicd.md` / `docs/99-uncovered.md` |
 
 - **P0 に `M2` は無い**（再現すべき設定ファイルがまだ無いため）
