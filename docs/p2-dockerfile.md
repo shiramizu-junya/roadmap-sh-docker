@@ -1399,6 +1399,7 @@ docker inspect p-exec  --format '{{.State.ExitCode}}'
 | --- | --- |
 | `0` | **自分で正常に終了した** |
 | `137` | `128 + 9`。**シグナル9（SIGKILL）で強制的に殺された** |
+| `143` | `128 + 15`。**シグナル15（SIGTERM）を受けて終わった**（`--init` を付けたときなど。下の訂正を参照）|
 
 **ログを見ると、差が決定的に分かる。**
 
@@ -1504,6 +1505,70 @@ INFO:     Finished server process [1]
 > 根拠: https://docs.docker.com/reference/dockerfile/#cmd
 
 ---
+
+#### ⚠️ 訂正（2026-09-22）: exec 形式にすれば必ず直る、わけではない
+
+**この節は後から足した。** M2 の宿題を作るために、Python 標準の Web サーバ（`python -m http.server`）で同じことを確かめたところ、**exec 形式で書いても10秒待たされた**。
+
+| | 書き方 | PID 1 | 停止 | 終了コード |
+| --- | --- | --- | --- | --- |
+| uvicorn | exec 形式 | `uvicorn` | 0.3秒 | `0` |
+| **http.server** | **exec 形式** | **`python`** | **10.2秒** | **`137`** |
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**PID 1 は正しい（`python`）のに、止まらなかった。**
+
+**原因: PID 1 は特別扱いされる。** Linux のカーネルは、**PID 1 には SIGTERM の「既定の動作」（＝終了する）を適用しない**。プログラムが**自分で受け取り方を決めていないシグナル**は、PID 1 のときだけ**無視される**。
+
+各プログラムが受け取り方を決めているシグナルは、`/proc/1/status` の `SigCgt` 行で見える。
+
+```bash
+docker exec <名前> grep SigCgt /proc/1/status
+```
+
+```
+http.server : SigCgt: 0000000000000002   ← SIGINT（2番）だけ
+uvicorn     : SigCgt: 0000000000004002   ← SIGINT と SIGTERM（15番 = 0x4000）
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**uvicorn は自分で SIGTERM を受け取る作りなので、PID 1 でも止まれた。** http.server はそうなっていないので、PID 1 になると SIGTERM が素通りする。
+
+> 🧒 **かみくだくと**: ふつうの社員なら「退社してください」と言われれば帰る（既定の動作）。
+> でも**社長（PID 1）だけは、自分で決めたルールが無い限り、その声を聞き流す**。会社がいきなり止まると困るので、そういう決まりになっている。
+> uvicorn は「退社と言われたら片づけて帰る」と**自分でルールを決めている**社長。http.server は決めていない社長。
+
+**同じ python でも、PID 1 でなければ SIGTERM で普通に終わる**ことも確かめた。問題は python ではなく、**PID 1 という立場**にある。
+
+**直し方: `--init` を付ける**
+
+```bash
+docker run --init ...
+```
+
+| | PID 1 | python は | 停止 | 終了コード |
+| --- | --- | --- | --- | --- |
+| `--init` なし | `python` | PID 1 | 10.2秒 | `137` |
+| **`--init` あり** | **`docker-init`** | **PID 7** | **0.2秒** | **`143`** |
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+`--init` を付けると、Docker が**小さな「代わりの社長」（`docker-init`）を PID 1 に置く**。この社長は受け取った合図を子どもに伝える専門。python は PID 1 ではなくなるので、SIGTERM の既定の動作が効いて**すぐ終わる**。
+
+終了コード `143` は `128 + 15`（**SIGTERM で終わった**）。`137`（SIGKILL で殺された）とは違い、**お願いを受け入れて終わった**ことを意味する。
+
+**まとめ直すと、`docker stop` がすぐ効く条件は2つとも要る。**
+
+| 条件 | 満たさないと |
+| --- | --- |
+| ① PID 1 がアプリ本体であること（**exec 形式**） | `sh` が PID 1 になり、合図が伝わらない |
+| ② PID 1 が **SIGTERM を自分で受け取る**こと、または **`--init` を付ける**こと | PID 1 の特別扱いで、合図が無視される |
+
+**uvicorn・nginx などのサーバはたいてい②を満たしている。** 自作のスクリプトや、道具として作られたプログラムは満たしていないことが多い。**迷ったら `--init` を付ければよい。**
+
+⏭️ **後で回収**: compose で同じことをする書き方（`init: true`）は **P4**。
 
 ### 5-4. 実践③: EXPOSE は穴を開けない
 
@@ -1617,7 +1682,7 @@ PORTS: 0.0.0.0:9998->9000/tcp
 
 <details><summary>答え</summary>
 
-1. **PID 1 が SIGTERM を受け取っても何もしないとき。** `CMD` をシェル形式で書くと `sh` が PID 1 になり、子どものアプリに合図を伝えないため。10秒経つと Docker が SIGKILL で強制終了する
+1. **PID 1 が SIGTERM を受け取っても何もしないとき。** `CMD` をシェル形式で書くと `sh` が PID 1 になり、子どものアプリに合図を伝えないため。10秒経つと Docker が SIGKILL で強制終了する。**exec 形式でも、PID 1 のプログラムが SIGTERM を自分で受け取る作りでなければ同じことが起きる**（PID 1 の特別扱い）。そのときは `--init` を付ける
 2. **`128 + 9` で、シグナル9（SIGKILL）による強制終了。** 自分で終了したなら `0` になる
 3. **ならない。** `EXPOSE` は「この番号を使う」という覚え書きにすぎない。実際に穴を開けるのは `-p`
 
@@ -1814,7 +1879,7 @@ docker rm -f p-shell p-exec e1 e2 e3
 | --- | --- | --- |
 | すぐ `Exited` になる | 1 → 2 | 起動コマンドの書き間違い、依存不足 |
 | `curl` がつながらない | 1（`PORTS` 欄） | `-p` の付け忘れ、または `--host 0.0.0.0` の書き忘れ |
-| `docker stop` が10秒 | 5 | `CMD` をシェル形式で書いている |
+| `docker stop` が10秒 | 5 | `CMD` をシェル形式で書いている。**exec 形式でも起きるなら**、PID 1 が SIGTERM を受け取らない作り（`grep SigCgt /proc/1/status` で確認）→ `--init` を付ける（P2-5 の訂正）|
 | 毎回 `pip install` が走る | — | `COPY app/` を `RUN` より上に書いている |
 
 ---
@@ -1970,4 +2035,225 @@ P3 以降で似た症状が出たとき、**ここを見返すのがいちばん
 
 **❓ 次の問い**: イメージは作れた。`docker stop` も速い。**だが、このアプリにはまだデータが無い。** P1-5 で「コンテナに書いたものは消える」と学んだ。**データベースをつなぐなら、そのデータはどこに置けばいいのか。**
 
-▶ **次**: `M2: P2` — **フェーズ末パック**（ブランクページ再現と宿題。今回は Dockerfile を白紙から再現する）
+▶ **次**: `M2: P2`（下へ続く）
+
+---
+
+# M2: P2 フェーズ末パック
+
+**P3 に進む前に、手で思い出す回。** 新しいことは学ばない。
+
+---
+
+## ✍️ ブランクページ再現
+
+> **これは翌日にやること。** 読んだ直後だと、短期の記憶が答えてしまう。
+> 一晩あけて書けるかどうかが、身についたかの判定になる。
+
+### やり方
+
+1. **ルートの `Dockerfile` を閉じる。** 開いたままにしない
+2. **新しいファイル**に書く。いまの `Dockerfile` は消さない
+   ```bash
+   touch /tmp/Dockerfile.blank
+   ```
+3. 何も見ずに、**課題B（FastAPI アプリのイメージ化）の Dockerfile** を白紙から書く
+4. 書けなかった行・迷った行に **印**（`# ?`）を付ける
+5. 書き終えたら、本物と見比べる
+   ```bash
+   diff /tmp/Dockerfile.blank Dockerfile
+   ```
+6. **印を付けた行の「🔬 仕組み解剖」だけ**読み返す。本文は読まなくてよい
+
+### 書くべきもの（見出しだけ。中身は書かない）
+
+```
+① 土台を選ぶ
+② 作業場所を決める
+③ 依存の一覧を入れる
+④ 依存をインストールする
+⑤ 自分のコードを入れる
+⑥ 使うポートを書き残す
+⑦ 起動のしかたを決める
+```
+
+**③〜⑤の順番を間違えないこと**が最大の山場。ここを逆にすると P2-4 の「8.0 秒」側になる。
+
+### 書いたものを動かして確かめる
+
+見比べるだけでなく、**自分で書いたほうをビルドして動かす**。
+
+```bash
+docker build -f /tmp/Dockerfile.blank -t blank .
+docker run -d --name blankt -p 9993:8000 blank
+curl http://localhost:9993/health
+time docker stop blankt
+docker rm blankt
+```
+
+`-f` は「**この名前の Dockerfile を使え**」という指定。いつもは `Dockerfile` という名前を自動で探すが、別の名前のものを使うときに付ける。
+
+### 印を付けた行の読み返し先
+
+| 迷ったもの | 読み返す場所 |
+| --- | --- |
+| `FROM` の書き方・版 | P2-1 の 1-4 |
+| `WORKDIR` と `COPY` の `.` | P2-2 の 2-5 |
+| `RUN` と `CMD` の違い | P2-3 の 3-5 |
+| ③〜⑤ の順番 | P2-4 の 4-3 |
+| `CMD` を配列で書く理由 | P2-5 の 5-3 と、その訂正 |
+| `--host 0.0.0.0` | P2-3 の 3-2 |
+
+---
+
+## 宿題
+
+P2 には**プロジェクト回（PJ1）がある**ので、**Lv1 と Lv2 だけ**を出す（`_prompt.md` §8.2）。Lv3 の役目は PJ1 が担った。
+**判定基準はすべてコマンドの出力で書いてある。**
+
+---
+
+### 🟢 Lv1: 別のアプリを型にする
+
+**課題**: 自分の HTML を1枚配信するイメージを作る。サーバは **Python に最初から入っているもの**を使う（`pip install` 不要）。
+
+**準備**（どこでもよい。リポジトリの外に作るのがおすすめ）
+
+```bash
+mkdir -p ~/tmp/lv1/site
+echo '<h1>hello from container</h1>' > ~/tmp/lv1/site/index.html
+cd ~/tmp/lv1
+```
+
+**ヒント**: Python には `python -m http.server <ポート>` と打つだけで、**いまいる場所のファイルを配信する**機能がある。
+
+**判定基準**
+
+| # | 打つコマンド | こう出れば合格 |
+| --- | --- | --- |
+| 1 | `curl http://localhost:9991/` | `<h1>hello from container</h1>` |
+| 2 | `docker exec <名前> cat /proc/1/comm` | `python`（`sh` ではない）|
+| 3 | `docker images <イメージ> --format '{{.Size}}'` | **210MB 未満**（`pip install` していないので土台とほぼ同じ）|
+| 4 | `docker inspect <名前> --format '{{.Config.ExposedPorts}}'` | `map[8000/tcp:{}]` のように**ポートが書かれている** |
+
+<details><summary>解答例</summary>
+
+```dockerfile
+FROM python:3.12-slim
+WORKDIR /site
+COPY site/ .
+EXPOSE 8000
+CMD ["python", "-m", "http.server", "8000"]
+```
+
+```bash
+docker build -t lv1 .
+docker run -d --name lv1t -p 9991:8000 lv1
+curl http://localhost:9991/
+docker exec lv1t cat /proc/1/comm
+docker images lv1 --format '{{.Size}}'
+```
+
+```
+<h1>hello from container</h1>
+python
+203MB
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+</details>
+
+**Lv1 が終わったら、コンテナを消さずに Lv2 へ進む。**
+
+---
+
+### 🟡 Lv2: 止まらないコンテナを直す
+
+**Lv1 のコンテナを止めてみる。**
+
+```bash
+time docker stop lv1t
+docker inspect lv1t --format '{{.State.ExitCode}}'
+```
+
+**たぶん10秒待たされて、終了コードは `137` になる。** exec 形式で書き、PID 1 も `python` なのに、である。
+
+**課題**: 次の2つを満たすようにする。
+
+1. `docker stop` が **1秒未満**で終わる
+2. 終了コードが **`137` 以外**になる
+
+そのうえで、**なぜ10秒かかったのかを1〜2文で説明する**。
+
+**判定基準**
+
+| # | 確かめること | 合格の条件 |
+| --- | --- | --- |
+| 1 | `time docker stop <名前>` | **1秒未満** |
+| 2 | `docker inspect <名前> --format '{{.State.ExitCode}}'` | **`137` ではない** |
+| 3 | 直す前に `docker exec <名前> grep SigCgt /proc/1/status` を打った | 出力を**自分で読んで**説明に使っている |
+| 4 | 説明 | 「PID 1」と「SIGTERM」という言葉を使って、**なぜ無視されたか**が書けている |
+
+> 💡 **ヒント**: 直し方は `Dockerfile` を書き換える方法と、`docker run` に何かを足す方法がある。P2-5 の訂正の節を読む。
+
+<details><summary>解答例</summary>
+
+**直し方**: `docker run` に `--init` を付ける。
+
+```bash
+docker rm lv1t
+docker run -d --init --name lv1t -p 9991:8000 lv1
+docker exec lv1t cat /proc/1/comm
+time docker stop lv1t
+docker inspect lv1t --format '{{.State.ExitCode}}'
+```
+
+```
+docker-init
+0.2 秒
+143
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**直す前の `SigCgt`**
+
+```
+SigCgt: 0000000000000002
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**説明の例**: `http.server` は SIGTERM（15番）の受け取り方を自分で決めていない（`SigCgt` に 0x4000 が無い）。PID 1 のプログラムには SIGTERM の既定の動作が適用されないので、`docker stop` の合図が無視され、10秒後に SIGKILL で殺された。`--init` を付けると PID 1 が `docker-init` になり、python は PID 1 でなくなるので、SIGTERM の既定の動作で終わる。
+
+**終了コード 143** は `128 + 15`。**SIGTERM で終わった**ことを意味する。`137`（SIGKILL で殺された）ではない。
+
+**別解**: Dockerfile に `ENTRYPOINT` で init を入れる方法、アプリ側で SIGTERM を受け取るように書く方法もある。どちらでも判定基準を満たせばよい。
+
+</details>
+
+**片づけ**
+
+```bash
+docker rm -f lv1t
+```
+
+---
+
+## ✅ P3 に進んでよいかの目安
+
+| | 状態 |
+| --- | --- |
+| ブランクページ再現 | 7つのうち **6つ以上**書けた。**③〜⑤の順番は必ず正しい** |
+| 書いたものを動かす | `/health` が返り、`docker stop` が1秒未満 |
+| Lv1 | 判定基準4つがすべて ✅ |
+| Lv2 | 1秒未満になり、**理由を自分の言葉で書けた** |
+
+**Lv2 の説明が書けていれば、P2 でいちばん難しいところ（PID 1 とシグナル）が身についている。**
+
+---
+
+**❓ 次の問い**: 型は作れた。止め方も分かった。でも P1-5 で見たとおり、**コンテナを消すと中に書いたものは消える**。**では、データベースのように消えては困るものは、どこに置けばいいのか。**
+
+▶ **次**: `M1: P3 ステップ1` — **volume でデータを残す**（P3 開始。コンテナを消してもデータが残る場所を作る）
