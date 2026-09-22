@@ -47,12 +47,14 @@ P0 だけは M2 を付けない（再現すべき設定ファイルがまだ無�
 出典を読んだうえで、**前提知識が揃う地点**から実施タイミングを確定済み（[`docs/00-plan.md`](docs/00-plan.md) §6.1）。
 各プロジェクトは**教材側から「▶ ここで PJ1 に取り組む」と前提チェック付きで指示が出る**ので、タイミングを自分で判断する必要はない。
 
-| PJ | 名前 | いつ | 前提が揃う理由 | 状態 |
-|---|---|---|---|---|
-| PJ1 | Basic Dockerfile | P2-5 の直後 | 任意課題に `ENTRYPOINT`+`CMD` が要る | **出題済み** |
-| PJ2 | Multi-Container Application | P4-6 の直後 | volume・network（P3）+ compose（P4）が要る | 未着手 |
-| PJ3 | Multi-Service Application | P5-5 の直後 | マルチステージ・非root・secrets・healthcheck が要る | 未着手 |
-| PJ4 | Dockerized Service Deployment | P6-5 の直後（任意） | push・CI・リモート実行が要る | 未着手 |
+| PJ | 名前 | プロジェクトURL | ディレクトリ | いつ | 状態 |
+|---|---|---|---|---|---|
+| PJ1 | Basic Dockerfile | https://roadmap.sh/projects/basic-dockerfile | [`projects/basic-dockerfile`](projects/basic-dockerfile) | P2-5 の直後 | **完成** |
+| PJ2 | Multi-Container Application | https://roadmap.sh/projects/multi-container-service | [`projects/multi-container-service`](projects/multi-container-service) | P4-6 の直後 | 未着手 |
+| PJ3 | Multi-Service Application | https://roadmap.sh/projects/multiservice-docker | [`projects/multiservice-docker`](projects/multiservice-docker) | P5-5 の直後 | 未着手 |
+| PJ4 | Dockerized Service Deployment | https://roadmap.sh/projects/dockerized-service-deployment | [`projects/dockerized-service-deployment`](projects/dockerized-service-deployment) | P6-5 の直後（任意） | 未着手 |
+
+**roadmap.sh への提出要件**: 公開リポジトリであること / README があること / **README にプロジェクトURLが書かれていること**。各プロジェクトの README と、この README の両方に URL を載せている。
 
 出典の要件は一部を取捨している（PJ2 の Terraform / Ansible は PJ4 へ、PJ3 の React は省略 など）。詳細は §6.1。
 
