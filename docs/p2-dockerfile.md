@@ -2054,14 +2054,22 @@ P3 以降で似た症状が出たとき、**ここを見返すのがいちばん
 
 1. **ルートの `Dockerfile` を閉じる。** 開いたままにしない
 2. **新しいファイル**に書く。いまの `Dockerfile` は消さない
+   リポジトリのルートに `Dockerfile.blank` という名前で作る（`.gitignore` 済みなのでコミットされない）
    ```bash
-   touch /tmp/Dockerfile.blank
+   touch Dockerfile.blank
    ```
+   > ⚠️ **`/tmp` に置いてはいけない**（最初はこう案内していたが誤りだった）。
+   > Dockerfile がビルドコンテキストの外にあると、Docker は**その Dockerfile が入っているフォルダごと**調べに行く。
+   > `/tmp` には他のアプリのファイルも置かれていて、読めないものがあると次のエラーで止まる。
+   > ```
+   > failed to read dockerfile: error from sender: failed to xattr /private/tmp/devio_semaphore_logi_hpp_...: permission denied
+   > ```
+   > ✅ 検証済み: Docker Desktop 4.81.0（Logicool Options+ が作ったフォルダで再現）
 3. 何も見ずに、**課題B（FastAPI アプリのイメージ化）の Dockerfile** を白紙から書く
 4. 書けなかった行・迷った行に **印**（`# ?`）を付ける
 5. 書き終えたら、本物と見比べる
    ```bash
-   diff /tmp/Dockerfile.blank Dockerfile
+   diff Dockerfile.blank Dockerfile
    ```
 6. **印を付けた行の「🔬 仕組み解剖」だけ**読み返す。本文は読まなくてよい
 
@@ -2084,7 +2092,7 @@ P3 以降で似た症状が出たとき、**ここを見返すのがいちばん
 見比べるだけでなく、**自分で書いたほうをビルドして動かす**。
 
 ```bash
-docker build -f /tmp/Dockerfile.blank -t blank .
+docker build -f Dockerfile.blank -t blank .
 docker run -d --name blankt -p 9993:8000 blank
 curl http://localhost:9993/health
 time docker stop blankt

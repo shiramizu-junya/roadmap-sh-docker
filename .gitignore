@@ -7,3 +7,6 @@
 .venv/
 __pycache__/
 *.pyc
+
+# M2 のブランクページ再現で書く練習用ファイル（コミットしない）
+Dockerfile.blank
