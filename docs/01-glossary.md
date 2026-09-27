@@ -51,7 +51,9 @@
 
 | 用語 | 正式名称 | 🧒 かみくだくと | 1行の意味 | 初出 | 詳しい解説 |
 | --- | --- | --- | --- | --- | --- |
-| （P3 で追記する） | | | | | |
+| volume（ボリューム） | volume | | | P3-1 | `p3-storage-network.md` 1-2 / 1-5 |
+| 名前付きボリューム | named volume | | | P3-1 | 同 1-5 |
+| 匿名ボリューム | anonymous volume | | | P3-1 | 同 1-7 |
 
 ## F. Linux 側の言葉
 
@@ -62,6 +64,8 @@
 | シンボリックリンク | symbolic link | | | P0-1 | `p0-foundations.md` 1-2 |
 | 共有ライブラリ | shared library | | | （P2-3 で扱う） | （これから） |
 | `/bin` | | | | P0-2 | 同 2-1 / 2-5 |
+| マウント | mount | | | P3-1 | `p3-storage-network.md` 1-5 |
+| マウントポイント | mount point | | | P3-1 | 同 1-5 |
 
 ---
 
