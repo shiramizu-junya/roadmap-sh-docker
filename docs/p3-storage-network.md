@@ -1012,4 +1012,390 @@ docker network rm demo-net other-net
 
 **❓ 次の問い**: データの置き場所（P3-1）、コードの見せ方（P3-2）、つなぎ方（P3-3）がそろった。**では、実際に MySQL を立てて、自分の FastAPI からつないでみるとどうなるか。** P3 の総仕上げ。
 
-▶ **次**: `M1: P3 ステップ4` — **MySQL を立て、FastAPI から接続する**（環境変数で接続情報を渡し、初回起動の初期化ログまで追う）
+▶ **次**: `M1: P3 ステップ4`（下へ続く）
+
+---
+
+## P3-4: MySQL を立て、FastAPI から接続する
+
+**❓ この回の問い**: P3-1（消えない置き場所）・P3-2（コードの見せ方）・P3-3（名前で呼ぶ）がそろった。→ **では、実際に MySQL を立ててつないでみると、この3つはどう組み合わさるのか？**
+
+**この回で覚えること（1つだけ）**
+
+> **DB は「ボリューム + ネットワーク + 環境変数」の3つがそろって初めて使える。**
+
+**重要度**: 🔴 毎日使う — P3 の総仕上げ。ここまでの全部を1つにまとめる
+**前ステップとの接続**: P3-1〜P3-3 は**部品**だった。今回それを**組み立てる**
+
+### 4-0. このステップの初出トークン
+
+**Docker**: `-e` / `--env-file` / `docker logs -f`
+
+---
+
+### 4-1. 実践①: 3つを組み合わせて MySQL を立てる
+
+**まず部品を用意する。**
+
+```bash
+docker network create app-net
+docker volume create db-data
+```
+
+**起動する。長いので、1行ずつ意味を確かめながら読む。**
+
+```bash
+docker run -d --name db \
+  --network app-net \
+  -v db-data:/var/lib/mysql \
+  -e MYSQL_ROOT_PASSWORD=rootpass \
+  -e MYSQL_DATABASE=appdb \
+  -e MYSQL_USER=appuser \
+  -e MYSQL_PASSWORD=apppass \
+  mysql:8.0
+```
+
+| 部分 | 役割 | 出てきた回 |
+| --- | --- | --- |
+| `--network app-net` | **名前 `db` で呼べるようにする** | P3-3 |
+| `-v db-data:/var/lib/mysql` | **データが消えないようにする** | P3-1 |
+| `-e MYSQL_...` | **初期設定を渡す** | 今回 |
+
+**`/var/lib/mysql` は MySQL がデータを置く場所。** そこをボリュームにしている。
+
+> 🧒 **かみくだくと**: `-e` は **environment（環境）** の頭文字。
+> **コンテナの中のプログラムに「設定を紙で渡す」**ようなもの。
+> MySQL のイメージは「起動時に `MYSQL_DATABASE` という紙があれば、その名前の DB を作る」という作りになっている。**イメージを作った人が決めた約束事**。
+
+---
+
+### 4-2. 実践②: 初回起動のログを追う
+
+```bash
+docker logs -f db
+```
+
+`-f` は **follow（追う）**。**新しい行が出るたびに画面に流れ続ける**。止めるときは `Ctrl + C`（コンテナは止まらない）。
+
+```
+[Note] [Entrypoint]: Initializing database files
+...
+[System] [MY-010931] [Server] /usr/sbin/mysqld: ready for connections. Version: '8.0.46'
+```
+
+✅ 検証済み: Docker Desktop 4.81.0 / mysql:8.0
+
+**2つの段階がある。**
+
+| ログ | 意味 |
+| --- | --- |
+| `Initializing database files` | **空の状態から DB を作っている**（初回だけ） |
+| `ready for connections` | **接続を受け付けられるようになった** |
+
+> ⚠️ **`docker ps` が `Up` でも、まだ繋がらない**。MySQL は起動してから準備が終わるまで数十秒かかる。`ready for connections` が出るまで待つ。⏭️ **後で回収**: この「起動したが、まだ使えない」問題を compose で扱うのが **P4-3**（`healthcheck`）。
+
+---
+
+### 4-3. 実践③: 名前で接続する
+
+P3-3 と同じやり方。**使い捨てのコンテナから、名前 `db` で呼ぶ。**
+
+```bash
+docker run --rm --network app-net mysql:8.0 \
+  mysql -h db -u appuser -papppass -e "SELECT 'OK' AS result;" appdb
+```
+
+```
+result
+OK
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**`-h db` の `db` がコンテナの名前。** `localhost` ではない（P3-3）。
+
+`mysql:8.0` のイメージには**サーバだけでなくクライアントも入っている**ので、同じイメージを「接続する側」としても使える。
+
+**データを入れてみる。**
+
+```bash
+docker run --rm --network app-net mysql:8.0 mysql -h db -u appuser -papppass -e "
+CREATE TABLE IF NOT EXISTS memo (id INT AUTO_INCREMENT PRIMARY KEY, body VARCHAR(100));
+INSERT INTO memo (body) VALUES ('P3-4 で入れたデータ');
+SELECT * FROM memo;" appdb
+```
+
+```
+id	body
+1	P3-4 で入れたデータ
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+---
+
+### 4-4. 実践④: コンテナを消しても残るか（P3 の答え合わせ）
+
+**🔮 先に予想する**
+
+> DB のコンテナを `docker rm -f` で消して、**同じボリュームを付けて作り直す**。
+> `memo` テーブルのデータは残っていると思うか。
+
+```bash
+docker rm -f db
+docker run -d --name db --network app-net -v db-data:/var/lib/mysql \
+  -e MYSQL_ROOT_PASSWORD=rootpass -e MYSQL_DATABASE=appdb \
+  -e MYSQL_USER=appuser -e MYSQL_PASSWORD=apppass mysql:8.0
+# ready for connections を待つ
+docker run --rm --network app-net mysql:8.0 mysql -h db -u appuser -papppass -e "SELECT * FROM memo;" appdb
+```
+
+```
+id	body
+1	P3-4 で入れたデータ
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**答え合わせ**: **残っていた。**
+
+**ログを見ると、もっとはっきりする。**
+
+```bash
+docker logs db | grep -c "Initializing database"
+```
+
+```
+0
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**2回目は「初期化」が走っていない。** ボリュームに既に DB があるので、**そのまま使い始めた**。
+
+**対照実験: ボリュームを付けないと。**
+
+```bash
+docker run -d --name db3 --network app-net -e MYSQL_ROOT_PASSWORD=x -e MYSQL_DATABASE=appdb mysql:8.0
+docker rm -f db3
+docker run -d --name db3 ...（同じ）
+docker logs db3 | grep -c "Initializing database"
+```
+
+```
+1
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**毎回「初期化」が走る = 毎回まっさらから作り直している。** 入れたデータは消えている。
+
+```
+┌───────────────────────────────────────────────────────┐
+│                 ネットワーク app-net                  │
+│                                                       │
+│ ┌──────────────────────┐   ┌──────────────────────┐   │
+│ │         api          │   │          db          │   │
+│ │       FastAPI        │   │      MySQL 8.0       │   │
+│ │                      │   │                      │   │
+│ │ mysql://...@db:3306  │   │     3306 で待つ      │   │
+│ └──────────────────────┘   └──────────────────────┘   │
+│                                                       │
+│               名前 db で呼べる（P3-3）                │
+└───────────────────────────────────────────────────────┘
+                           │
+                           ↓
+┌───────────────────────────────────────────────────────┐
+│          ボリューム db-data → /var/lib/mysql          │
+│            コンテナを消しても残る（P3-1）             │
+└───────────────────────────────────────────────────────┘
+```
+
+---
+
+### 4-5. 🔬 仕組み解剖: 環境変数で設定を渡す
+
+**なぜを下ってみる。**
+
+```
+なぜ設定ファイルではなく環境変数で渡すのか
+  → イメージは変えずに、動かすときだけ設定を変えたいから
+      → なぜイメージを変えたくないのか
+          → 同じイメージを開発でも本番でも使いたいから
+              → 設定が違うのに同じイメージでよいのか
+                  → よい。違うのは「渡す紙」だけ
+                      → つまりイメージとは何か
+                          → 設定を含まない「型」。設定は動かすときに外から入れる
+```
+
+| 部品 | 正式名称 | かみくだくと | いつ効くか |
+| --- | --- | --- | --- |
+| `-e KEY=値` | environment variable | **中のプログラムに渡す設定の紙** | **ランタイム時**。`docker run` のたびに決まる |
+| `--env-file ファイル` | 同上 | **紙をまとめて渡す** | 同上 |
+
+**`-e` が増えると長くなるので、ファイルにまとめられる。**
+
+```bash
+# db.env
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=appdb
+MYSQL_USER=appuser
+MYSQL_PASSWORD=apppass
+```
+
+```bash
+docker run -d --name db2 --network app-net --env-file db.env mysql:8.0
+```
+
+```
+result
+env-file OK
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**⚠️ ただし、パスワードが丸見えになる**
+
+```bash
+docker inspect db2 --format '{{range .Config.Env}}{{println .}}{{end}}' | grep MYSQL
+```
+
+```
+MYSQL_ROOT_PASSWORD=rootpass
+MYSQL_DATABASE=appdb
+MYSQL_USER=appuser
+MYSQL_PASSWORD=apppass
+```
+
+✅ 検証済み: Docker Desktop 4.81.0
+
+**コンテナを触れる人なら誰でも読める。**
+
+> 🔓 **教材用の簡略化**: この教材ではパスワードを `-e` や `.env` で直接渡している。**本番ではこれをしない。**
+> **本番では**: Docker の secrets か、クラウドの秘密情報の仕組みを使う。イメージや履歴に残ると漏洩する。
+> 根拠: https://docs.docker.com/compose/how-tos/use-secrets/
+
+⏭️ **後で回収**: 安全な渡し方は **P4-5**。
+
+**失敗するとどうなるか**: `-e MYSQL_ROOT_PASSWORD` を付けずに MySQL を起動すると、**起動自体が拒否される**（パスワード無しでは動かない作りになっている）。`docker logs` に理由が出る。
+
+**あなたが知っているものでいうと**: **`.env` ファイル**そのもの。FastAPI で `os.environ` や `pydantic-settings` から読む値を、**コンテナの外から入れている**のと同じ。
+
+### 4-6. 解説 — なぜ3つ必要なのか
+
+**1つでも欠けると、DB として使えない。**
+
+| 欠けると | 何が起きるか |
+| --- | --- |
+| **ボリューム**が無い | 作り直すたびにデータが消える（4-4 の対照実験） |
+| **ネットワーク**が無い | アプリから名前で呼べない（P3-3） |
+| **環境変数**が無い | そもそも起動しない、または DB が作られない |
+
+> 🧠 **Docker の考え方**: **コンテナは使い捨て、データは残す、つなぎ方は名前で。** この3つをそろえるのが、DB を動かすときの型。
+
+**あなたのアプリから使うときの接続先**は、こう書くことになる。
+
+```
+mysql://appuser:apppass@db:3306/appdb
+                        ↑
+                 コンテナの名前（localhost ではない）
+```
+
+⏭️ **後で回収**: 実際に FastAPI から接続するコードを書くのは **PJ2**（P4 の末尾）。そこでは compose を使うので、今回のような長いコマンドは書かなくてよくなる。
+
+### 4-7. ✅ 想起チェック
+
+何も見ずに答えてみる。
+
+1. DB のコンテナに必要な3つの要素は何か
+2. `docker ps` が `Up` なのに接続できないことがあるのはなぜか
+3. `-e` で渡したパスワードは、どこから読めてしまうか
+
+<details><summary>答え</summary>
+
+1. **ボリューム**（データを残す）・**ネットワーク**（名前で呼べる）・**環境変数**（初期設定を渡す）
+2. **MySQL の準備が終わっていないから。** `Up` はコンテナのプロセスが動いていることしか意味しない。`docker logs` で `ready for connections` を確認する
+3. **`docker inspect` の `Config.Env`。** コンテナを触れる人なら誰でも読める。本番では secrets を使う（P4-5）
+
+</details>
+
+### 4-8. 初出トークンの回収確認
+
+| トークン | 扱い |
+| --- | --- |
+| `-e KEY=値` | 4-5 で仕組み解剖。「設定の紙を渡す」。⚠️ `docker inspect` で読めてしまう |
+| `--env-file` | 4-5 で使用。紙をまとめて渡す。読めてしまう点は同じ |
+| `docker logs -f` | 4-2 で使用。新しい行を追い続ける。`Ctrl+C` で見るのをやめてもコンテナは止まらない |
+| `ready for connections` | 4-2 で説明。⏭️ 起動順の問題は **P4-3**（`healthcheck`）|
+| 安全なパスワードの渡し方 | ⏭️ **P4-5 で回収** |
+| FastAPI から実際に接続する | ⏭️ **PJ2 で回収** |
+
+---
+
+### 📇 まとめカード（翌日はここだけ見返す）
+
+```
+┌───────────────────────────────────────────────────────┐
+│ P3-4  MySQL を立て、つないでみる                      │
+│                                                       │
+│ 覚えること（1つ）                                     │
+│   DB は「ボリューム + ネットワーク + 環境変数」       │
+│   の3つがそろって初めて使える                         │
+│                                                       │
+│ 3つの役割                                             │
+│   -v db-data:/var/lib/mysql  消えないようにする       │
+│   --network app-net          名前で呼べるようにする   │
+│   -e MYSQL_...               初期設定を渡す           │
+│                                                       │
+│ 実測                                                  │
+│   1回目の起動 → Initializing database files           │
+│   データを入れて docker rm -f db                      │
+│   同じボリュームで作り直す                            │
+│     → データが残っている                              │
+│     → Initializing は出ない（0回）                    │
+│   ボリューム無しで同じことをすると                    │
+│     → Initializing が毎回出る（空から作り直し）       │
+│                                                       │
+│ 接続先の書き方                                        │
+│   mysql://appuser:apppass@db:3306/appdb               │
+│                           ↑ localhost ではない        │
+│                                                       │
+│ パスワードが丸見えになる点に注意                      │
+│   docker inspect db で MYSQL_PASSWORD が読める        │
+│   → 本番では別の渡し方をする（P4-5）                  │
+│                                                       │
+│ 次の問い                                              │
+│   この長いコマンドを毎回打つのか？                    │
+└───────────────────────────────────────────────────────┘
+```
+
+---
+
+**後片づけ**
+
+```bash
+docker rm -f db db2 db3
+docker volume rm db-data
+docker network rm app-net
+```
+
+> 💡 **MySQL は名前の無いボリュームも作る**。`-v` を付けずに起動すると、Docker が勝手にボリュームを1つ作ってデータを置く（コンテナを消しても残る）。`docker volume ls` に16進の長い名前で並ぶのがそれ。`docker volume prune` で整理できる。
+
+---
+
+## 🎓 P3 修了
+
+| 回 | 覚えたこと1つ | 決め手になった実験 |
+| --- | --- | --- |
+| P3-1 | 消えては困るものはボリュームへ | `rm` しても別コンテナから読めた |
+| P3-2 | bind mount は Mac の実物を見せる | 保存した瞬間に反映された |
+| P3-3 | 同じネットワークなら名前で呼べる | `--network` の有無だけで結果が変わった |
+| P3-4 | DB は3つそろって初めて使える | 作り直してもデータが残った |
+
+**P1-5 で「コンテナに書いたものは消える」と知った時点では、DB をどう扱えばいいか分からなかった。** いまは答えられる。
+
+---
+
+**❓ 次の問い**: MySQL を立てるのに、`--network`・`-v`・`-e` を4つ…と**10行近いコマンド**を打った。アプリ側も同じように長くなる。**毎回これを手で打つのか。しかも順番も守らないといけない。**
+
+▶ **次**: `M1: P4 ステップ1` — **compose.yaml に置き換える**（P4 開始。長いコマンドを1つのファイルにまとめ、`docker compose up` の1行で起動する）
