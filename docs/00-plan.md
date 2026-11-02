@@ -1,579 +1,370 @@
 # 00. 学習計画（M0）
 
-**モード**: M0 学習計画 / 生成日: 2026-09-20 / **改訂: 2026-09-21**
+**モード**: M0 学習計画 / 生成日: 2026-11-01 / **状態: 承認済み（2026-11-01）**
 **素材**: `docs/_roadmap-docker-source.md`（roadmap.sh/docker 全56トピック）
-**本編は書かない。** 以降は `M1: P0 ステップ1` のように1ステップずつ呼ぶ。
+**生成ルール**: `docs/_prompt.md`
 
-> **2026-09-21 の改訂**（2点）
-> 1. **P0「基礎」フェーズを新設**（3ステップ）。なぜコンテナが必要か / Docker のアーキテクチャ / 用語の地図 を、手を動かす前に置く。あわせて `docs/01-glossary.md`（用語の逆引き）を全フェーズで育てる
-> 2. **題材アプリはこのリポジトリ内で新規に作る**。別リポジトリ（`roadmap-sh-fastapi`）は参照しない。P2-2 の冒頭で `/health` だけの最小 FastAPI アプリを `app/` に書き、MySQL 接続は P3-4 で足す
-> 3. **PJ1〜PJ4 の出典を実際に読み、実施タイミングと要件の取捨を確定**（§6.1）。あわせて **P4 に「認証情報を secrets で渡す」を追加**（PJ3 の要件に Docker secrets があるため）。P4 は 5 → 6ステップ
-> 4. **実行順を §8 に確定**。教材側にも進行ナビを入れ、「次に何を呼ぶか」を毎回教材が指示する
+本編は1フェーズずつ生成し、フェーズごとに確認を受ける。
 
 ---
 
 ## 1. 到達点の確認
 
-| # | 到達点 | 満たすフェーズ | 満たされたと判断する根拠 |
+| # | 到達点 | 満たすフェーズ | 検証の形 |
 | --- | --- | --- | --- |
-| 1 | 任意のアプリを Dockerfile でイメージ化できる | **P2**（PJ1 で確定） | 自分で書いた Dockerfile から `docker build` が通り、`docker run` でアプリが応答する |
-| 2 | 複数コンテナを compose で連携させ、データを永続化できる | **P3 → P4**（PJ2 で確定） | `docker compose up` 1回で FastAPI + MySQL が起動し、`down` → `up` 後もデータが残る |
-| 3 | イメージサイズと起動時間を意図して削減できる | **P5**（PJ3 で確定） | 削減前後の `docker image ls` の数値を、どの変更がどれだけ効いたか説明付きで出せる |
-| 4 | 落ちた・繋がらないときに原因の層を特定できる | **P1 で土台 → P3・P4・P5 で積む** | 「ホスト / デーモン / イメージ / コンテナプロセス / ネットワーク」のどの層かを、コマンド出力を根拠に言える |
-
-**P0 はどの到達点にも直接は対応しない。** 4つとも「作れる / 直せる」能力であり、P0 はそこに乗る土台（語彙とアーキテクチャの地図）を作る回。ここを飛ばすと、P1 以降のエラーメッセージが「どの層から出た文字列なのか」判断できなくなる。
-
-到達点4だけは単独のフェーズを持たない。P1-3（ログと `inspect`）、P1-4（ホストから見たプロセス）で切り分けの土台を作り、以降は各プロジェクト回の「詰まったときの確認順」（`_prompt.md` §7）で毎回反復する設計にする。
+| 1 | 任意のアプリを Dockerfile でイメージ化できる | P2（PJ1） | 自分で書いた Dockerfile で `docker build` が通り、`curl` に応答する |
+| 2 | 複数コンテナを Compose で連携させ、データを永続化できる | P3 → P4（PJ2） | `docker compose up` 1回で EC が動き、`down` → `up` 後も商品が残る |
+| 3 | イメージのサイズとビルド時間を意図して削減できる | P5 | 変更ごとの差を数値で示し、理由を説明できる |
+| 4 | 本番向けに安全な構成へ変えられる | P6（PJ3） | 非 root で動き、パスワードが `docker inspect` と `docker history` に出ない |
+| 5 | イメージの配布と CI/CD の流れを説明し、構築できる | P7（PJ4） | push のたびに CI がテストとビルドを行い、レジストリに公開される。デプロイは読むだけでも流れを説明できる |
+| 6 | 落ちた・繋がらないときに原因の層を特定できる | P1 から全フェーズ | 「ホスト / デーモン / イメージ / プロセス / ネットワーク」のどの層かを、コマンド出力を根拠に言える |
 
 ---
 
-## 2. 環境準備
+## 2. 前提知識・環境
 
-この環境ではすでに Docker Desktop が入っており、下記はすべて実行して出力を確認済み。
+✅ 検証済み: **Docker Desktop / Docker Engine 29.8.0 / containerd v2.3.5 / runc 1.5.1 / Docker Compose v5.5.1 / buildx v0.37.1 / macOS 26.6.2（arm64）**
 
-✅ 検証済み: **Docker Desktop 4.81.0 / Docker Engine 29.6.1 / macOS (darwin/arm64)**
+| 種類 | 使うもの | 確認した版 | 選んだ理由 |
+| --- | --- | --- | --- |
+| API 実行環境 | `python:3.13-slim` | Python 3.13.18 | 公式イメージ。Debian 系で `apt` も学べる |
+| Web フレームワーク | Django / Django Ninja | 5.2.18（LTS）/ 1.7.3 | 指定どおり。Django は LTS 系を採用 |
+| DB | `mysql:8.4` | 8.4.13（LTS） | 指定どおり。Django 5.2 の要件は MySQL 8.0.11 以上 |
+| DB ドライバ | mysqlclient | 2.3.0 | Django が推奨するドライバ |
+| キャッシュ / キュー | `redis:8-alpine` | 8.10.3 | カートと Celery のブローカーを兼ねる |
+| 非同期処理 | Celery | 5.6.3 | Django で広く使われるタスクキュー |
+| アプリサーバ | gunicorn | 26.2.0 | Django の本番用 WSGI サーバ |
+| フロント | `node:24-alpine` / Vite / React | Node 24.22.2 / 8.3.5 / 19.3.1 | Node は LTS 系 |
+| 入口 | `nginx:1.30-alpine` | 1.30.6 | 静的配信とリバースプロキシ |
+| Python 依存管理 | uv | 0.13.6 | ロックファイルで再現性を確保できる |
 
-| # | コマンド | 役割（1行） |
+✅ 検証済み: `python:3.13-slim` 上に上記の Python パッケージを入れ、`mysql:8.4` に Django 5.2 のマイグレーションが通ることを確認した。
+
+> 💡補足: `mysqlclient` は `python:3.13-slim` のままではインストールできず、`gcc` などのビルド用パッケージが必要だった。実測ではビルド用パッケージ入りのイメージが 739MB になった。これは P3-4 でつまずきとして体験し、P5-4 でマルチステージビルドの題材にする。
+
+### 環境準備
+
+| # | コマンド | 役割 |
 | --- | --- | --- |
-| 1 | `docker version` | クライアントとサーバ（デーモン）の**両方**が応答するか。Server 行が無ければデーモンが起動していない |
-| 2 | `docker context ls` | どのデーモンに繋ぎに行っているか。`desktop-linux *` に `*` が付いていれば Docker Desktop 側 |
-| 3 | `docker info` | デーモン側の構成。ストレージドライバ・アーキテクチャ・OS を1か所で確認する |
-| 4 | `docker compose version` | Compose が `docker` のサブコマンドとして使えるか（旧 `docker-compose` とは別物） |
-| 5 | `docker run --rm hello-world` | pull → コンテナ生成 → 実行 → 削除まで一通り通るかの通し確認 |
-| 6 | `docker ps` | 実行中コンテナの一覧。`--rm` を付けた `hello-world` が残っていないことの確認にも使う |
+| 1 | `docker version` | クライアントとデーモンの両方が応答するか確認する |
+| 2 | `docker context ls` | どのデーモンにつないでいるか確認する |
+| 3 | `docker info` | デーモン側の構成を確認する |
+| 4 | `docker compose version` | Compose が使えるか確認する |
+| 5 | `docker run --rm hello-world` | pull から実行までの通し確認 |
 
-この環境での実際の出力（抜粋）:
-
-```
-$ docker version
- Client: Version 29.6.1 / OS/Arch darwin/arm64 / Context desktop-linux
- Server: Docker Desktop 4.81.0 (232925) — Engine 29.6.1 / OS/Arch linux/arm64
-
-$ docker info --format '{{.ServerVersion}} / {{.OperatingSystem}} / {{.Architecture}} / {{.Driver}}'
-29.6.1 / Docker Desktop / aarch64 / overlayfs
-
-$ docker compose version
-Docker Compose version v5.2.0
-
-$ docker run --rm hello-world
-Hello from Docker!
-```
-
-✅ 検証済み: 上記6コマンドすべて、この環境で実行し記載どおりの結果を得た。
-
-> 💡補足: Client が `darwin/arm64`、Server が `linux/arm64` と**割れている**のは正常。macOS にはコンテナを動かすカーネル機能が無いため、Docker Desktop は Linux VM を1つ立て、その中でデーモンを動かしている。つまり**コンテナの外側が2段**になる（この Mac → Linux VM → コンテナ）。本教材で「**ホスト**」と書いたら、断りがない限り**コンテナのすぐ外側 = Linux VM** を指す。Mac 本体を指すときは「この Mac」と書き分ける。用語の定義は P0-1、図にするのは P0-2、`ps` で並べるのは P1-4。
-
-> 💡補足: Engine 29.x の `docker images` は列が `DISK USAGE` / `CONTENT SIZE` に変わっており、従来の `SIZE` 列は無い。P5 でサイズを測るときはこの2列で読む（`DISK USAGE` = ローカルディスク占有、`CONTENT SIZE` = 転送される圧縮サイズ）。
-
-⚠️ 未実行（この環境では確認していないため、必要になったら読者が確認する）:
-- Docker Desktop の**リソース割り当て**（Settings → Resources の CPU / Memory）。P5 のビルド時間や P4 の MySQL 起動時間に効く。検証手順: `docker info --format '{{.NCPU}} / {{.MemTotal}}'`
+**ホストの Mac に Python と Node.js は要らない。** 依存のインストールも実行もコンテナの中で行う。
 
 ---
 
-## 3. リポジトリ構成（完成時の全体像）
+## 3. リポジトリ構成（完成時）
 
-**このリポジトリ1つで完結させる。** 教材・題材アプリ・設定ファイル・プロジェクト成果物をすべてここに置き、別リポジトリを行き来しない。
+モノレポにする。現時点で存在するのは `docs/` だけで、`apps/` 以下は読者が教材を見ながら自分で作る。
 
-```
+```text
 roadmap-sh-docker/
-├── README.md                    進捗と到達点（フェーズ完了ごとに更新）
-├── app/                         ← 題材アプリ（P2-2 でここに新規作成する）
-│   ├── main.py                  FastAPI。P2-2 時点では /health だけ
-│   ├── pyproject.toml           依存。P2-3 で RUN の対象になる
-│   └── requirements.txt         ※ P2-3 で uv / pip のどちらを使うか決めて生成
-├── Dockerfile                   ← P2-1 で作り、P2 を通して育てる
-├── .dockerignore                ← P2-2 で作る
-├── compose.yaml                 ← P4-1 で作る
+├── README.md
+├── compose.yaml            開発用（P4）
+├── compose.prod.yaml       本番用の差分（P6）
+├── apps/
+│   ├── api/                Django + Django Ninja（P2 から）
+│   │   ├── Dockerfile
+│   │   ├── .dockerignore
+│   │   ├── pyproject.toml
+│   │   ├── uv.lock
+│   │   └── src/
+│   └── web/                React + Vite（P4 から）
+│       ├── Dockerfile
+│       ├── .dockerignore
+│       ├── package.json
+│       └── src/
+├── infra/
+│   └── nginx/              Nginx の設定（P6）
+├── .github/workflows/      CI/CD（P7）
 ├── docs/
-│   ├── _prompt.md               生成プロンプト（入力・編集しない）
-│   ├── _roadmap-docker-source.md 単元素材（入力・編集しない）
-│   ├── 00-plan.md               ← このファイル（M0 の出力）
-│   ├── 01-glossary.md           用語の逆引き（P0-3 で骨格 → 全フェーズで追記）
-│   ├── p0-foundations.md        P0 の全ステップ（プロジェクト・M2 パックなし）
-│   ├── p1-container-basics.md   P1 の全ステップ + M2 パック
-│   ├── p2-dockerfile.md         P2 の全ステップ + MP(PJ1) + M2 パック
-│   ├── p3-storage-network.md    P3 の全ステップ + M2 パック
-│   ├── p4-compose.md            P4 の全ステップ + MP(PJ2) + M2 パック
-│   ├── p5-optimize.md           P5 の全ステップ + MP(PJ3) + M2 パック
-│   ├── p6-cicd.md               P6 の全ステップ + MP(PJ4) + M2 パック（任意）
-│   └── 99-uncovered.md          M3 の出力
-└── projects/
-    ├── basic-dockerfile/    README.md（要件・判定基準・詰まった記録）+ 成果物
+│   ├── _prompt.md
+│   ├── _roadmap-docker-source.md
+│   ├── 00-plan.md
+│   ├── 01-glossary.md      用語の逆引き
+│   ├── p0-foundations.md
+│   ├── p1-container-basics.md
+│   ├── p2-dockerfile.md
+│   ├── p3-storage-network.md
+│   ├── p4-compose.md
+│   ├── p5-optimize.md
+│   ├── p6-production.md
+│   ├── p7-delivery.md
+│   └── 99-uncovered.md     M3 の出力
+└── projects/               EC に含まれない roadmap.sh の提出物
+    ├── basic-dockerfile/
     ├── multi-container-service/
-    ├── multiservice-docker/
-    └── dockerized-service-deployment/         任意
+    └── dockerized-service-deployment/
 ```
 
-**`projects/` は roadmap.sh に提出するもの専用**（2026-09-22 決定）。
-- ディレクトリ名は **roadmap.sh の URL の末尾（slug）と同じ**にする（例: `roadmap.sh/projects/basic-dockerfile` → `projects/basic-dockerfile/`）
-- 各ディレクトリは**自己完結**させる（その中だけで `docker build` が通る）。サブディレクトリの URL で提出できなくても、切り出すだけで独立リポジトリにできる
-- 教材が独自に足した課題（PJ1 の課題B など）は `projects/` に置かず、リポジトリのルート（`app/` と `Dockerfile`）で育てる
-- 構成は `roadmap-sh-django-projects` と揃えてある
-
-`projects/*/README.md` は雛形が作成済み。MP モードの出力を「要件」「判定基準」に貼り、詰まった箇所は必ず「詰まった記録」表に残す（到達点4の素材になる）。
-
-### 3.1 題材アプリの方針 🔄
-
-`_prompt.md` §2.1 は「学習中の FastAPI + MySQL アプリ」を題材とするが、**そのアプリは持ち込まず、このリポジトリ内で最小の FastAPI アプリを新規に書く**ことにした。
-
-| | 内容 |
-| --- | --- |
-| 何を作るか | P2-2 の冒頭で `app/main.py` を書く。**`/health` が `{"status": "ok"}` を返すだけ** |
-| いつ育てるか | P3-4 で MySQL 接続を足し、Todo の読み書きができる最小 API にする。以降 P4・P5 はこれを使い回す |
-| なぜそうするか | Docker の挙動だけに集中できる。アプリ側のバグと、コンテナ化のミスが混ざらない。イメージが小さく、ビルドが速いので P2-4 のキャッシュ実験や P5 のサイズ比較が**数秒で回り、差が読み取れる** |
-| トレードオフ | 「既にあるアプリをコンテナ化する」経験は PJ1〜PJ3 で取り戻す。プロジェクト回は要件だけ与えて自力で組むため、そこが実戦になる |
-
-> 🔄 **素材からの変更**: roadmap.sh の各プロジェクトは Node.js（Express）を前提に書かれている。本教材ではこれを **FastAPI（Python 3.12）+ MySQL** に置き換える。対応関係は MP 回で毎回明示する（`package.json` → `pyproject.toml` / `npm install` → `pip install` / `node server.js` → `uvicorn` など）。
-
-**設定ファイルの扱い**: `Dockerfile` / `compose.yaml` はリポジトリのルートに実ファイルとして置き、**同じ内容を教材（`docs/pN-*.md`）にも全文掲載する**（`_prompt.md` §9.2「教材と設定を分離しない」）。ファイルを開かなくても教材だけで筋が追える状態を保つ。
-
 ---
 
-## 4. フェーズ別ステップ一覧
+## 4. 題材アプリの育ち方
 
-粒度ルール（1ステップの Docker 側初出は最大3・1フェーズ6ステップ以下）は全フェーズで満たしている。**分割提案は不要。**
+機能は Docker の概念を学ぶために足す。アプリの解説は最小限にする。
 
-### P0 — 基礎：なぜコンテナか / アーキテクチャ / 用語（6ステップ・プロジェクトなし）
+```text
+P2  api                                   /api/health
+P3  api + db                              商品一覧・詳細
+P4  web + api + db + redis + worker       画面・商品画像・カート・サムネイル
+P6  nginx + web成果物 + api + db + redis + worker   本番構成
+```
 
-**1ステップで覚えることは1つだけ。新しい言葉は4つまで。** 読む量を減らし、そのぶん手を動かす回数を増やす。
-（2026-09-21 改訂: 読み手から「理解できるが頭に入らない」との指摘。3ステップ版は1回に新語16個・手を動かすのは4行だけだった）
-
-| # | タイトル | この回で覚えること（1つだけ） | 新しい言葉 | 手を動かす |
-| --- | --- | --- | --- | --- |
-| P0-1 | 「動かない」はどこで起きるのか | 動くかどうかは**コードの下の層**で決まる | `コンテナ`（名前だけ）/ 土台（たとえ） | 5コマンド・予測3回 |
-| P0-2 | OS とカーネルは違う | **カーネルは OS の一部**（下半分） | `OS` / `カーネル` / 上半分・下半分 | `/bin` の中身を数える・版番号を2つ比べる |
-| P0-3 | 3つの運び方 | コンテナは**下半分を借りる** | `仮想マシン` / `ゲスト OS` / `仮想化ソフト` | 図1を自分で埋める |
-| P0-4 | Mac の中で Linux が動いている | Mac に Linux の土台が無いから**借り物を1つ用意している** | `ホスト` / `ゲスト` / `darwin` | **2つのカーネルを並べて見る** |
-| P0-5 | Docker のアーキテクチャ | `docker` と打つと**別のプログラムに頼んでいる** | `docker info` / `docker system events` / デーモン | イベントを流しながら観察 |
-| P0-6 | 用語の地図 | 5つの言葉が**1本の線でつながる** | （新規なし。整理のみ） | `docs/01-glossary.md` を自分で埋める |
-
-**P0 の設計メモ**（M1 生成時に守る）
-
-- **各ステップは「予測 → 実行 → 答え合わせ」を2〜3回まわす。** 読ませてから確かめるのではなく、**先に予想させてから打たせる**
-- **各ステップの末尾に `📇 まとめカード` を1枚置く。** 覚えることが1つだけ書いてある。翌日これだけ見返す
-- **P0-1**: 土台の正体（＝カーネル）は**まだ明かさない**。「この土台には名前がある。次回明かす」で終える
-- **P0-2**: macOS の版番号（26.6.2）とカーネルの版番号（25.6.0）が**食い違う**ことを実測させる。これが「OS とカーネルは別物」の動かぬ証拠になる
-- **P0-4**: `uname -r`（Mac の Darwin カーネル）と `docker info` の `KernelVersion`（Linux カーネル）を**並べて表示**させる。1台のパソコンに**カーネルが2つ**見えることが、この回の山場
-- **P0-5**: `docker run` のオプションと挙動は **P1-1 で扱う**。ここでは「どのプログラムが何を出したか」だけ見て `⏭️ 後で回収: P1-1` を宣言する
-- **P0-6**: 用語集は**読者が埋める**。AI が埋めたものを読むのではなく、自分の言葉で書いたものだけが残る
-- P0 には M2（ブランクページ再現・宿題）を付けない。再現すべき設定ファイルがまだ無いため
-
-> ⚠️ **このユーザ環境の注意**: `ls` が別のツール（eza）に置き換えられている。教材で標準の `ls` の出力を見せるときは **`/bin/ls` と絶対パスで書く**。`ls /bin` と書くとエラーになる（実測で確認済み）。
-
-### P1 — コンテナとは / イメージとコンテナの違い / CLI 基礎（5ステップ・プロジェクトなし）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P1-1 | 既存イメージを動かす | nginx を起動し、ブラウザとホスト側の両方から見える形を確認する | `docker run` `docker ps` `docker stop` | 🔴 |
-| P1-2 | イメージとコンテナは別物 | 1つのイメージから2つのコンテナを作り、片方だけ消して差を見る | `docker pull` `docker images` `docker rm` | 🔴 |
-| P1-3 | 動いているコンテナを調べる | ログ・シェル・設定の3方向から、同じコンテナの状態を突き合わせる | `docker logs` `docker exec` `docker inspect` | 🔴 |
-| P1-4 | 隔離されているもの / 共有されているもの | ホスト側とコンテナ内の `ps` を並べ、PID がずれていることを確認する | `docker top` `docker stats` | ⚪ |
-| P1-5 | 書き込みはどこへ消えるか | コンテナ内でファイルを作り、`stop`→`start` と `rm`→`run` で結果が違うことを確認する | `docker start` `docker diff` | 🟡 |
-
-P1-4 で **namespace / cgroup** を、P1-5 で **union filesystem（マウント）** を仕組み解剖として厚く扱う。
-
-### P2 — Dockerfile / レイヤ / ビルドキャッシュ（5ステップ + PJ1）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P2-1 | Dockerfile を1枚書いてビルドする | ベースイメージ + 起動コマンドだけのイメージを作り、`docker run` する | `FROM` `CMD` `docker build -t` | 🔴 |
-| P2-2 | アプリのコードをイメージに入れる | **冒頭で `app/main.py`（`/health` のみ）を新規に書き**、COPY したうえでイメージ内の配置を `exec` で確認する | `COPY` `WORKDIR` `.dockerignore` | 🔴 |
-| P2-3 | 依存をインストールし、レイヤが積まれるのを見る | `pip install` を入れ、1命令ごとにレイヤが増えることを確認する | `RUN` `docker history` | 🔴 |
-| P2-4 | ビルドキャッシュを効かせる | COPY の順序を入れ替え、再ビルドで何行目からやり直されるか比較する | `--no-cache` `docker builder prune` | 🔴 |
-| P2-5 | 起動コマンドとポート / 止まらないコンテナ | `docker stop` が10秒待たされる状態を作り、直してから測り直す | `EXPOSE` `ENTRYPOINT` `-p` | 🔴 |
-| **MP** | **PJ1: Basic Dockerfile** | roadmap.sh の要件を FastAPI 題材に置き換えて自力で組む | — | — |
-
-P2-5 で **PID 1 とシグナル** を仕組み解剖として厚く扱う。
-
-### P3 — データ永続化（volume / bind mount）/ ネットワーク（4ステップ・プロジェクトなし）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P3-1 | volume でデータを残す | コンテナを `rm` してから作り直し、volume 内のデータが残ることを確認する | `docker volume create` `-v` `docker volume inspect` | 🔴 |
-| P3-2 | bind mount でホストのコードを見せる | ホストで編集した行がコンテナ内に即反映されることと、生成ファイルの所有者を確認する | `--mount type=bind` `--user` | 🔴 |
-| P3-3 | コンテナ同士をつなぐ | 同じネットワークに2つ置き、コンテナ名で名前解決できることを確認する | `docker network create` `--network` `docker network inspect` | 🔴 |
-| P3-4 | MySQL を立て、FastAPI から接続する | 環境変数で接続情報を渡し、初回起動の初期化ログまで追う | `-e` `--env-file` `docker logs -f` | 🔴 |
-
-P3-2 で **UID / GID とパーミッション**、P3-1 で **マウント** を仕組み解剖として厚く扱う。
-
-### P4 — Docker Compose / 複数コンテナの連携（6ステップ + PJ2）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P4-1 | P3 の `docker run` を compose.yaml に置き換える | 同じ構成が1コマンドで立ち上がり、生成されるリソース名の規則を確認する | `services:` `docker compose up` `docker compose down` | 🔴 |
-| P4-2 | volume と network を compose で宣言する | `down` と `down -v` でデータの運命が変わることを確認する | `volumes:` `networks:` `docker compose ps` | 🔴 |
-| P4-3 | 起動順と「起動した」の定義 | MySQL 起動途中に FastAPI が繋ぎに行って落ちる状態を作り、直す | `depends_on` `healthcheck` `condition` | 🔴 |
-| P4-4 | 設定を外に出す | `.env` と `environment` の優先順位を、展開後の定義で確認する | `environment:` `env_file:` `docker compose config` | 🟡 |
-| P4-5 | 認証情報を secrets で渡す | DB パスワードが `docker inspect` と `docker history` の**どちらにも出ない**状態を作る | `secrets:` `/run/secrets/` | 🔴 |
-| P4-6 | 日々の開発ワークフロー | コードを変えたとき何を再実行すべきか（再起動 / 再ビルド）を切り分ける | `docker compose logs -f` `docker compose build` `--watch` | 🟡 |
-| **MP** | **PJ2: Multi-Container Application** | FastAPI + MySQL を compose で自力で組む（出典の要件①のみ。§6.1）| — | — |
-
-### P5 — イメージ最適化 / マルチステージ / セキュリティ（5ステップ + PJ3）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P5-1 | 今のイメージを測る | どのレイヤが何 MB を占めているかを数値で出し、削減対象を決める | `docker system df` `docker image inspect` | 🟡 |
-| P5-2 | ベースイメージを選び直す | `python:3.x` / `-slim` / `-alpine` を同条件でビルドし、サイズとビルド時間を比べる | `--platform` `docker image ls --filter` | ⚪ |
-| P5-3 | マルチステージビルド | ビルド用の道具を最終イメージから追い出し、前後のサイズを比較する | `AS` `COPY --from` `--target` | 🔴 |
-| P5-4 | root で動かさない | 非 root ユーザで起動し、bind mount したファイルの所有者がどうなるか確認する | `USER` `--read-only` `--cap-drop` | 🔴 |
-| P5-5 | 脆弱性スキャンとタグ運用 | ベースイメージの既知 CVE を一覧し、`latest` を使わないタグを付け直す | `docker scout cves` `docker tag` | 🟡 |
-| **MP** | **PJ3: Multi-Service Application** | 複数サービス構成を最適化込みで自力で組む | — | — |
-
-P5-4 で P3-2 の **UID / GID** を回収する（`USER` 側からの再訪）。
-
-### P6（任意）— レジストリ / CI/CD / リモートデプロイ（5ステップ + PJ4）
-
-| # | タイトル | 作ること / 確かめること | 初出（Docker） | 重要度 |
-| --- | --- | --- | --- | --- |
-| P6-1 | イメージをレジストリに push する | GHCR に push し、別名で pull し直して同じものが返ることを確認する | `docker login` `docker push` | 🔴 |
-| P6-2 | タグとダイジェスト | 同じタグを2回 push し、タグが動いてもダイジェストは動かないことを確認する | `@sha256:` `docker buildx imagetools inspect` | 🟡 |
-| P6-3 | GitHub Actions でビルドして push する | CI 上でビルドが通り、ローカルと同じダイジェストになるか確認する | `docker/build-push-action` `docker buildx` | 🟡 |
-| P6-4 | マルチアーキテクチャビルド | arm64 と amd64 の両方を1タグで配り、manifest を確認する | `docker buildx build --platform` | ⚪ |
-| P6-5 | リモートホストで動かす | リモートの Docker デーモンに繋いで compose を起動し、ログを手元で追う | `docker context create` `docker compose -H` | 🟡 |
-| **MP** | **PJ4: Dockerized Service Deployment** | CI から push → リモートで起動までを自力で通す | — | — |
-
-**合計: 36ステップ + プロジェクト4本**（P6 を除くと 31ステップ + 3本）。
-
-内訳: **P0 6** / P1 5 / P2 5 / P3 4 / **P4 6** / P5 5 / P6 5。
-
-### 4.1 Linux 例外5つの扱い場所
-
-`_prompt.md` §4.3 の「厚く扱う5つ」がどこに入るかの確定。
-
-| 例外 | 主担当ステップ | 回収・再訪 |
+| 機能 | 導入 | 引き出す Docker の概念 |
 | --- | --- | --- |
-| namespace | P1-4 | P3-3（ネットワーク namespace）|
-| cgroup | P1-4 | P5-1（メモリ制限とビルド）|
-| PID 1 とシグナル | P2-5 | P4-3（停止しないサービスの切り分け）|
-| UID / GID とパーミッション | P3-2 | P5-4（`USER` 側から再訪）|
-| マウント | P3-1 | P1-5 で下地（union filesystem）→ P3-2（bind mount との対比）|
-
-いずれも P0-2 で**名前と居場所だけ**先に置く（「カーネルのこの機能がコンテナの正体」という地図の描画）。仕組みの解剖は上表の主担当ステップで行う。
+| ヘルスチェック API | P2 | Dockerfile、レイヤ、ポート公開 |
+| 商品一覧・詳細 | P3 | volume、network、環境変数、DB の初期化 |
+| 商品画面 | P4 | Compose へのサービス追加、開発時の同期 |
+| カート | P4 | Redis の追加、サービス名での名前解決 |
+| 商品画像・サムネイル | P4 | ワーカー、同じイメージの別コマンド起動、volume の共有 |
+| 本番配信 | P6 | マルチステージの成果物、リバースプロキシ |
 
 ---
 
-## 5. 単元との対応表（素材の全56トピック）
+## 5. ステップ一覧
 
-`docs/_roadmap-docker-source.md` の全トピックを、どのフェーズで消化するかの対応。**漏れの可視化がこの表の目的**なので、扱わないものも理由付きで全件載せる。
+合計 **35ステップ**（P0 3 / P1 5 / P2 5 / P3 4 / P4 6 / P5 4 / P6 4 / P7 4）。
+1ステップの Docker 側の初出は最大3つ。全体が15ステップを超えるため、テンプレに従って8フェーズに分割した。
 
-| # | トピック | 扱う場所 | 備考 |
+### P0 — なぜコンテナか / Docker の構造（プロジェクト・M2 なし）
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P0-1 | 「動かない」はどこで起きるのか | アプリの下にある層を実機で確かめる | `コンテナ` `イメージ` | ⚪ |
+| P0-2 | ベアメタル・VM・コンテナ | Mac と Docker の2つのカーネルを並べて見る | `カーネル` `VM` `ホスト` | ⚪ |
+| P0-3 | `docker` と打つと何が起きるか | イベントを流しながら hello-world を実行する | `docker run` `docker system events` `OCI` | ⚪ |
+
+### P1 — コンテナ操作 / 隔離の仕組み
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P1-1 | 既存イメージを動かす | nginx を起動してブラウザで見る | `-d` `-p` `docker ps` | 🔴 |
+| P1-2 | イメージとコンテナは別物 | 1つのイメージから2つのコンテナを作る | `docker pull` `docker image ls` `docker rm` | 🔴 |
+| P1-3 | 動いているコンテナを調べる | ログ・シェル・設定の3方向から調べる | `docker logs` `docker exec` `docker inspect` | 🔴 |
+| P1-4 | 隔離の正体 | PID のずれとメモリ制限を確認する | `namespace` `cgroup` `--memory` | ⚪ |
+| P1-5 | 書き込みはどこへ消えるか | `stop` と `rm` で結果の違いを見る | `docker start` `docker diff` `overlay` | 🟡 |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1〜3 | — | — |
+
+### P2 — Dockerfile で API をイメージ化する
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P2-1 | 最小の Dockerfile | Python を実行するだけのイメージを作る | `FROM` `CMD` `docker build` | 🔴 |
+| P2-2 | コードをイメージに入れる | Django のコードを置き、配置を確かめる | `COPY` `WORKDIR` `.dockerignore` | 🔴 |
+| P2-3 | 依存を入れて API を動かす | uv で依存を入れ、レイヤの増加を見る | `RUN` `docker history` `uv sync` | 🔴 |
+| P2-4 | ビルドキャッシュを効かせる | 命令の順序で再ビルド時間を比べる | `--no-cache` `docker builder prune` `build context` | 🔴 |
+| P2-5 | 起動とポート / 止まらないコンテナ | `docker stop` が10秒かかる状態を直す | `EXPOSE` `ENTRYPOINT` `PID 1` | 🔴 |
+| **PJ1** | Basic Dockerfile | 提出用に小さな Dockerfile を書く | — | — |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1・Lv2 | — | — |
+
+### P3 — データとネットワーク：API を MySQL につなぐ
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P3-1 | volume でデータを残す | コンテナを消しても DB が残ることを確かめる | `docker volume` `-v` `マウント` | 🔴 |
+| P3-2 | bind mount で開発する | コードの変更が即反映されることと所有者を確かめる | `--mount type=bind` `--user` `UID/GID` | 🔴 |
+| P3-3 | コンテナ同士をつなぐ | コンテナ名で通信できることを確かめる | `docker network` `--network` `bridge` | 🔴 |
+| P3-4 | 商品 API を MySQL につなぐ | ビルド失敗を直し、商品一覧を返す | `-e` `--env-file` `apt-get` | 🔴 |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1〜3 | — | — |
+
+### P4 — Compose で EC を組み上げる
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P4-1 | 長いコマンドを compose.yaml にする | api と db を1コマンドで起動する | `services:` `docker compose up` `docker compose down` | 🔴 |
+| P4-2 | volume と network を宣言する | `down` と `down -v` の差を確かめる | `volumes:` `networks:` `docker compose ps` | 🔴 |
+| P4-3 | 「起動した」の定義 | DB の起動待ちで落ちる状態を作って直す | `healthcheck` `depends_on` `condition` | 🔴 |
+| P4-4 | React の画面を足す | 開発サーバを動かし、変更を同期する | `build:` `docker compose exec` `docker compose watch` | 🔴 |
+| P4-5 | Redis でカートを作る | サービスを足し、設定を外に出す | `environment:` `env_file:` `docker compose config` | 🔴 |
+| P4-6 | ワーカーでサムネイルを作る | 同じイメージを別コマンドで動かし、画像を共有する | `command:` `docker compose logs -f` `stop_grace_period` | 🔴 |
+| **PJ2** | Multi-Container Application | Todo API を自力で組む | — | — |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1・Lv2 | — | — |
+
+### P5 — サイズ削減とマルチステージ
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P5-1 | 今のイメージを測る | サイズと既知の脆弱性を数値にする | `docker system df` `docker image inspect` `docker scout cves` | 🟡 |
+| P5-2 | ベースイメージを選ぶ | slim / alpine を同条件で比べる | `ARG` `ENV` `--platform` | 🟡 |
+| P5-3 | フロントのマルチステージ | Node を最終イメージから追い出す | `AS` `COPY --from` `--target` | 🔴 |
+| P5-4 | API のマルチステージ | `gcc` を追い出し、gunicorn で起動する | `gunicorn` `--no-dev` `.venv の移送` | 🔴 |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1〜3 | — | — |
+
+### P6 — 本番構成 / セキュリティ / 運用設定
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P6-1 | Nginx を入口にする | 静的配信と API の中継を1つの入口にまとめる | `proxy_pass` `docker compose -f` `expose:` | 🔴 |
+| P6-2 | root で動かさない | 非 root で起動し、volume の所有者問題を直す | `USER` `read_only:` `cap_drop:` | 🔴 |
+| P6-3 | パスワードを外に出す | `inspect` と `history` に出ないことを確かめる | `secrets:` `/run/secrets/` `--secret` | 🔴 |
+| P6-4 | 落ちても戻る / ログを溢れさせない | 再起動方針とログの上限を設定する | `restart:` `logging:` `max-size` | 🟡 |
+| **PJ3** | Multi-Service Application | EC 全体を要件と照合して提出する | — | — |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1・Lv2 | — | — |
+
+### P7 — レジストリ / CI/CD / デプロイ
+
+| # | タイトル | 作るもの / 確かめること | 初出トークン | 重要度 |
+| --- | --- | --- | --- | --- |
+| P7-1 | レジストリへ push する | タグとダイジェストの違いを確かめる | `docker tag` `docker push` `@sha256:` | 🔴 |
+| P7-2 | GitHub Actions でテストと公開 | コンテナ内テスト、スキャン、push を自動化する | `docker/build-push-action` `docker compose run` `GHCR` | 🔴 |
+| P7-3 | マルチアーキテクチャ | arm64 と amd64 を1つのタグで配る | `docker buildx build --platform` `manifest` `imagetools inspect` | ⚪ |
+| P7-4 | サーバへデプロイする | 別ホストで起動し、更新と切り戻しをする | `docker context` `ssh://` `docker compose pull` | 🟡 |
+| **PJ4** | Dockerized Service Deployment（任意） | CI からサーバ公開までを通す | — | — |
+| **M2** | フェーズ末パック | ブランクページ再現 + 宿題 Lv1・Lv2 | — | — |
+
+**最後に M3** で `docs/99-uncovered.md` を作る。
+
+---
+
+## 6. roadmap.sh のプロジェクト
+
+出典は 2026-11-01 に確認した。
+
+| PJ | 実施 | 置き場 | 要件の扱い |
 | --- | --- | --- | --- |
-| 1 | application-architecture | P4-1 / PJ3 | サービス分割の判断のみ。マイクロサービス設計論そのものは扱わない |
-| 2 | bare-metal-vs-vms-vs-containers | **P0-1** | 比較の観点のみ。仮想化の歴史とハイパーバイザの分類は扱わない |
-| 3 | basics-of-docker | **P0-3** / P1 全体 | 用語の骨格は P0-3、コマンドは P1 |
-| 4 | bind-mounts | P3-2 | |
-| 5 | building-container-images | P2 全体 | |
-| 6 | cgroups | P1-4 | 例外5つ。厚く扱う |
-| 7 | command-line-utilities | P1-2 / P1-3 | |
-| 8 | container-registries | **P0-3**（用語として）/ P6-1 | 「イメージがどこから来るか」は P0-3 で置く。実際に push するのは P6-1（**任意**）|
-| 9 | container-security | **P4-5** / P5-4 / P5-5 | 認証情報の扱いは P4-5、実行権限は P5-4、イメージの脆弱性は P5-5 |
-| 10 | containers | **P0-3** / P1 全体 | |
-| 11 | continuous-integration | P6-3 | 任意 |
-| 12 | data-persistence | P3-1 | |
-| 13 | databases | P3-4 / P4-3 | MySQL コンテナの運用まで。SQL チューニングは扱わない |
-| 14 | debuggers | **扱わない** | コンテナ内デバッガ接続は言語と IDE 依存が大きく、Docker の仕組みの理解に寄与しない。M3 で公式URLを出す |
-| 15 | deploying-containers | P6-5 | 任意 |
-| 16 | developer-experience | P4-5 | compose を使った日々のワークフローまで |
-| 17 | docker-and-oci | **P0-2** | 「イメージと実行時の仕様が標準化されており、Docker はその実装の1つ」という1点のみ |
-| 18 | docker-cli | **P0-2** / P1 全体 | CLI とデーモンが**別プロセス**である点は P0-2 で扱う |
-| 19 | docker-compose | P4 全体 | |
-| 20 | docker-desktop-winmaclinux | 本ファイル §2 | |
-| 21 | docker-engine--linux | 本ファイル §2 / **P0-2** / P1-4 | macOS では Linux VM 上でデーモンが動く点を P0-2 で地図に置き、P1-4 で解剖する |
-| 22 | docker-run | P1-1 | |
-| 23 | docker-swarm | **扱わない** | 複数ホストのオーケストレーションは `【範囲の外枠】` の外。M3 に記載 |
-| 24 | dockerfiles | P2 全体 | |
-| 25 | dockerhub | P1-2 / P6-1 | |
-| 26 | efficient-layer-caching | P2-4 | |
-| 27 | ephemeral-container-filesystem | P1-5 | |
-| 28 | hot-reloading | P3-2 | bind mount + `uvicorn --reload` の組み合わせとして |
-| 29 | image-security | P5-5 | |
-| 30 | image-size-and-security | P5-1 〜 P5-3 | |
-| 31 | image-tagging-best-practices | P5-5 / P6-2 | |
-| 32 | images | **P0-3** / P1-2 | |
-| 33 | installation--setup | 本ファイル §2 | 導入済みのため確認コマンドのみ |
-| 34 | introduction | **P0-1** | |
-| 35 | kubernetes | **扱わない** | 同上（オーケストレータ）。M3 に記載 |
-| 36 | namespaces | P1-4 | 例外5つ。厚く扱う |
-| 37 | networks | P3-3 | bridge のみ。overlay / macvlan は扱わない |
-| 38 | nomad | **扱わない** | 同上（オーケストレータ）。M3 に記載 |
-| 39 | others-ghcr-ecr-gcr-acr-etc | P6-1 / P6-3 | GHCR のみ実際に使う。他は名前と用途の紹介 |
-| 40 | paas-options | P6-5 で1行のみ | 各 PaaS の操作手順は扱わない（Docker の仕組みから離れるため）。M3 に一覧 |
-| 41 | package-managers | P2-3 | `RUN` で `apt` / `apk` を使う分だけ。🐧 Linux注として最小限 |
-| 42 | programming-languages | **扱わない（前提として充足）** | `【既知スタック】` に TypeScript / Python があり、前提条件をすでに満たしている。題材アプリは P2-2 で最小の FastAPI を新規に書く（§3.1）|
-| 43 | running-containers | P1-1 | |
-| 44 | runtime-configuration-options | P3-4 / P5-4 | `-e` `--user` `--restart` `--memory` など、使う場面で都度 |
-| 45 | runtime-security | P5-4 | 非 root / 読み取り専用 FS まで。実行時監視ツール（Falco 等）は扱わない |
-| 46 | shell-commands | **単元としては扱わない** | `ls` `ps` `chown` などは 🐧 Linux注として出てきた場所で1〜3行だけ添える（§4.3 の方針そのもの）|
-| 47 | shell-scripting | P2-5 で最小限 | `ENTRYPOINT` スクリプトと `exec` 形式の話に限る。Bash 文法の解説はしない |
-| 48 | tests | P6-3 で1回触れるのみ | コンテナ内でのテスト実行は CI の文脈で扱う。テスト設計は範囲外 |
-| 49 | underlying-technologies | **P0-2**（概観）/ P1-4（解剖）| P0-2 は名前と居場所だけ。中身は P1-4 |
-| 50 | union-filesystems | P1-5 / P2-3 | 例外5つ（マウント）の下地 |
-| 51 | users--groups-permissions | P3-2 / P5-4 | 例外5つ。厚く扱う |
-| 52 | using-3rd-party-container-images | P1-1 / P5-2 | |
-| 53 | volume-mounts | P3-1 | |
-| 54 | volumes | P3-1 | |
-| 55 | what-are-containers | **P0-1** | |
-| 56 | why-do-we-need-containers | **P0-1** | |
+| **PJ1** Basic Dockerfile | P2 末 | `projects/basic-dockerfile/` | `alpine:latest` で文字列を出す。任意課題の引数も行う |
+| **PJ2** Multi-Container Application | P4 末 | `projects/multi-container-service/` | Part 1 を Django Ninja + MySQL の Todo API で作る |
+| **PJ3** Multi-Service Application | P6 末 | リポジトリのルート | EC 全体で満たす。API のカスタムベース、全サービスのヘルスチェックとログローテーションも含める |
+| **PJ4** Dockerized Service Deployment | P7 末（任意） | `projects/dockerized-service-deployment/` | Node.js を Django Ninja に置き換える。サーバが要るので任意 |
 
-**扱わないトピック（7件）**: debuggers / docker-swarm / kubernetes / nomad / programming-languages（前提として充足）/ shell-commands（単元化せず注釈で処理）/ paas-options（一覧のみ）。
-**P6 を実施しない場合に未消化となるトピック（5件）**: container-registries / continuous-integration / deploying-containers / others-ghcr-ecr-gcr-acr-etc / tests。
-
----
-
-## 6. 除外プロジェクトの理由
-
-roadmap.sh の Docker プロジェクトのうち、2つを扱わない。
-
-| プロジェクト | 扱わない理由 |
-| --- | --- |
-| `nodejs-service-deployment` | Docker を使わない CI/CD 課題（Node アプリを GitHub Actions から VPS へ直接デプロイする）で、コンテナの仕組みを1つも触らないため |
-| `stans-navigation-deployment` | 「コンテナ化済みアプリをリモートへデプロイする」内容が PJ4 と重複し、新しく学ぶ点が無いため |
-
-### 6.1 プロジェクトの実施タイミング（出典を読んだ結果の確定）
-
-PJ1〜PJ4 の出典ページを取得して要件を確認した（2026-09-21 / roadmap.sh はプロジェクトページのみ URL から読める）。
-**前提となる知識がどのステップで揃うか**から逆算した結果、`_prompt.md` §1 の配置（P2・P4・P5・P6 の末尾）をそのまま採用する。ただし**要件の取捨**が必要。
-
-| PJ | いつやるか | この位置にする理由（前提が揃う地点） |
+| 出典の項目 | 扱い | 理由 |
 | --- | --- | --- |
-| **PJ1** | **P2 末**（P2-5 の直後） | 出典の本体は `FROM` + 起動コマンドだけなので P2-1 の直後でも解ける。だが**任意課題の「名前を引数で受け取る」に `ENTRYPOINT` と `CMD` の合わせ技が要る**（P2-5）。ここまで待つと P2 の5ステップが全部使える |
-| **PJ2** | **P4 末**（P4-6 の直後） | 出典の要件①は「複数コンテナ + データ永続化 + 単一コマンド起動」。volume と network（P3）、compose と起動順（P4）が揃って初めて成立する |
-| **PJ3** | **P5 末**（P5-5 の直後） | マルチステージ（P5-3）・非 root（P5-4）・secrets（P4-5）・healthcheck（P4-3）が全部要る。P5 を終えた時点が最短の成立地点 |
-| **PJ4** | **P6 末**（P6-5 の直後） | レジストリ push（P6-1）・CI（P6-3）・リモート実行（P6-5）が前提。**P6 は任意フェーズ**なので、やらない場合 PJ4 も実施しない |
+| PJ2 の Terraform / Ansible | 扱わない | Docker と別の学習対象になる。M3 に載せる |
+| PJ2 の Part 3（CI/CD デプロイ） | P7 と PJ4 で扱う | 内容が重複するため |
+| PJ2 の Nginx（ボーナス） | P6-1 で扱う | PJ3 の要件と重複するため |
+| `nodejs-service-deployment` | 扱わない | Docker を使わない課題のため |
+| `stans-navigation-deployment` | 扱わない | PJ4 と学習内容が重複するため |
 
-**出典からの取捨**（MP 回で `🔄 素材からの変更` として明示する）
-
-| PJ | 採用する | 落とす / 移す | 理由 |
-| --- | --- | --- | --- |
-| PJ1 | `alpine` ベースで文字列を出す要件 + **任意課題（引数で挨拶を変える）** を最低ラインとし、本題は `app/` の FastAPI イメージ化 | — | 出典のままでは P2 の5ステップのうち1つしか使わないため、課題として軽すぎる。`alpine:latest` の `latest` は 🔓 を付けてタグ固定に直させる |
-| PJ2 | 要件①（Compose + API + DB + 永続化 + 単一コマンド起動）のみ | 要件②（**Terraform / Ansible / クラウドサーバ**）と要件③（**GitHub Actions**）→ **PJ4 へ**。ボーナスの Nginx → **PJ3 へ** | Terraform / Ansible は素材のトピック一覧にも `【範囲の外枠】` にも無い。②③は PJ4 とほぼ同一内容 |
-| PJ3 | Compose での複数サービス連携 / カスタムベースイメージ / マルチステージ / secrets / healthcheck / **Nginx（PJ2 から移管）** | **React フロントエンド** → 静的ファイル配信に置換（または省略）。**ログローテーション** → 判定基準から外し「余裕があれば」に降格（§7 に記載） | React アプリを新規に用意すると学習対象が2つに割れる（`_prompt.md` §2.1 と同じ理由）。ログドライバの設定はホスト側の運用設定で、単一ホストの学習環境では効果を測りにくい |
-| PJ4 | 出典の Part 1〜4 すべて + **PJ2 の要件②③を吸収** | — | 題材を Node → FastAPI に置き換えるだけで、そのまま P6 の内容と噛み合う |
-
-**スタックの置き換え**（4本共通）: Node.js + Express → **FastAPI**、MongoDB / Mongoose → **MySQL**、Nodemon → **`uvicorn --reload`**、`package.json` → **`pyproject.toml`**、`npm install` → **`pip install`**。
-
-**PJ2 と PJ4 の重複について**: 出典どうしを突き合わせた結果、PJ2 の要件②③は PJ4 の Part 3・4 とほぼ同じ内容だった。§6 で `stans-navigation-deployment` を「PJ4 と重複」として除外した判断は変わらないが、**同じ重複が PJ2 の中にもあった**ため、上表のとおり PJ4 側に寄せる。
+🔄 **素材からの変更**: Node.js + Express → Django + Django Ninja / MongoDB → MySQL / nodemon → `runserver` / `docker-compose.yml` → `compose.yaml`。
 
 ---
 
-## 7. 範囲外の予告
+## 7. デプロイの扱い（VPS を借りなくても理解できる形）
 
-`【範囲の外枠】`（素材のトピック一覧 / docs.docker.com の reference・build・compose）と照らして、**この教材では扱わない主要項目**。詳細と一次情報URLは M3（`docs/99-uncovered.md`）で確定する。
+P7-4 と PJ4 は2本立てにする。
+
+| 読み方 | 内容 | 費用 |
+| --- | --- | --- |
+| **読むだけ** | 手順と実際の出力を載せる。出力を見れば流れが分かるように書く | 0円 |
+| **手元で試す** | Linux コンテナを「疑似サーバ」として SSH で接続し、`docker context` とデプロイを体験する | 0円 |
+| **VPS で試す** | 同じ手順を実サーバで行う | VPS 費用 |
+
+疑似サーバで確認した箇所は `✅ 検証済み（疑似サーバ）` と書く。実 VPS 固有の手順は `⚠️ 未実行` として検証手順を併記する。
+
+---
+
+## 8. 単元との対応表（全56トピック）
+
+| # | トピック | 扱う場所 |
+| --- | --- | --- |
+| 1 | application-architecture | P4 / P6-1 |
+| 2 | bare-metal-vs-vms-vs-containers | P0-2 |
+| 3 | basics-of-docker | P0-3 / P1 全体 |
+| 4 | bind-mounts | P3-2 |
+| 5 | building-container-images | P2 全体 |
+| 6 | cgroups | P1-4 |
+| 7 | command-line-utilities | P1-3 |
+| 8 | container-registries | P7-1 |
+| 9 | container-security | P6-2 / P6-3 |
+| 10 | containers | P1 全体 |
+| 11 | continuous-integration | P7-2 |
+| 12 | data-persistence | P3-1 |
+| 13 | databases | P3-1 / P3-4 |
+| 14 | debuggers | **扱わない**（M3）。言語と IDE に依存し、Docker の仕組みの学習から離れるため |
+| 15 | deploying-containers | P7-4 |
+| 16 | developer-experience | P4-4 |
+| 17 | docker-and-oci | P0-3 |
+| 18 | docker-cli | P1 全体 |
+| 19 | docker-compose | P4 全体 |
+| 20 | docker-desktop-winmaclinux | 本ファイル §2 / P0-2 |
+| 21 | docker-engine--linux | P0-3 |
+| 22 | docker-run | P1-1 |
+| 23 | docker-swarm | **扱わない**（M3）。複数ホストの運用は本教材の到達点の外 |
+| 24 | dockerfiles | P2 全体 |
+| 25 | dockerhub | P1-2 / P7-1 |
+| 26 | efficient-layer-caching | P2-4 |
+| 27 | ephemeral-container-filesystem | P1-5 |
+| 28 | hot-reloading | P3-2 / P4-4 |
+| 29 | image-security | P5-1 / P7-2 |
+| 30 | image-size-and-security | P5 全体 |
+| 31 | image-tagging-best-practices | P7-1 |
+| 32 | images | P1-2 |
+| 33 | installation--setup | 本ファイル §2 |
+| 34 | introduction | P0-1 |
+| 35 | kubernetes | **扱わない**（M3）。同上 |
+| 36 | namespaces | P1-4 |
+| 37 | networks | P3-3 |
+| 38 | nomad | **扱わない**（M3）。同上 |
+| 39 | others-ghcr-ecr-gcr-acr-etc | P7-1 / P7-2 |
+| 40 | paas-options | **扱わない**（M3）。各社の操作手順で、Docker の仕組みから離れるため |
+| 41 | package-managers | P3-4 / P5-2 |
+| 42 | programming-languages | 前提として充足 |
+| 43 | running-containers | P1-1 |
+| 44 | runtime-configuration-options | P1-4 / P3-4 / P6-2 / P6-4 |
+| 45 | runtime-security | P6-2 |
+| 46 | shell-commands | 単元にせず、🐧 Linux注で必要な分だけ扱う |
+| 47 | shell-scripting | P2-5（`ENTRYPOINT` の範囲） |
+| 48 | tests | P7-2 |
+| 49 | underlying-technologies | P1-4 / P1-5 |
+| 50 | union-filesystems | P1-5 / P2-3 |
+| 51 | users--groups-permissions | P3-2 / P6-2 |
+| 52 | using-3rd-party-container-images | P1-1 / P5-2 |
+| 53 | volume-mounts | P3-1 |
+| 54 | volumes | P3-1 |
+| 55 | what-are-containers | P0-1 |
+| 56 | why-do-we-need-containers | P0-1 |
+
+**扱わない6件**: debuggers / docker-swarm / kubernetes / nomad / paas-options / programming-languages（前提として充足）。
+programming-languages 以外の5件は M3 に一次情報付きで載せる。
+
+---
+
+## 9. 範囲外の予告
+
+詳細は M3 の `docs/99-uncovered.md` で確定する。
 
 | 項目 | 扱わない理由 | 一次情報 |
 | --- | --- | --- |
-| Kubernetes | 複数ホストのオーケストレーションは外枠の外。Docker 単体の理解が先 | https://kubernetes.io/docs/ |
-| Docker Swarm | 同上。Compose まででこの教材の到達点は満たせる | https://docs.docker.com/engine/swarm/ |
+| Kubernetes | 複数ホストのオーケストレーションは到達点の外 | https://kubernetes.io/docs/ |
+| Docker Swarm | 同上 | https://docs.docker.com/engine/swarm/ |
 | Nomad | 同上 | https://developer.hashicorp.com/nomad/docs |
-| イメージ署名（Content Trust / cosign） | 配布の信頼性の話で、コンテナの実行の仕組みとは層が違う | https://docs.docker.com/engine/security/trust/ |
-| rootless モード | Docker Desktop（macOS）では前提が変わり、挙動の再現が取れない | https://docs.docker.com/engine/security/rootless/ |
-| overlay / macvlan ネットワーク | 複数ホスト前提。P3 は単一ホストの bridge に限定する | https://docs.docker.com/engine/network/drivers/ |
-| Windows コンテナ | 実行環境が macOS のため検証できない | https://learn.microsoft.com/virtualization/windowscontainers/ |
-| containerd / runc の内部実装 | 「なぜその挙動か」は namespace・cgroup の層まで下りれば説明できる。それ以下は深追いしない | https://github.com/opencontainers/runc |
-| BuildKit の独自フロントエンド / リモートキャッシュ | 到達点3はマルチステージと base image の選択で達成できる | https://docs.docker.com/build/cache/backends/ |
-| 実行時監視・脅威検知（Falco 等） | 運用フェーズの話で、学習用の単一ホスト環境では効果を確認できない | https://falco.org/docs/ |
-| ログドライバとログローテーション | PJ3 の出典にあるがホスト側の運用設定で、コンテナの仕組みの理解に寄与が薄い。PJ3 の「余裕があれば」課題に降格（§6.1）| https://docs.docker.com/engine/logging/configure/ |
+| PaaS 各社の手順 | Docker の仕組みから離れる | https://docs.docker.com/guides/ |
+| Terraform / Ansible | Docker と別の学習対象 | https://developer.hashicorp.com/terraform/docs |
+| デバッガ接続 | 言語と IDE に依存する | https://docs.docker.com/reference/cli/docker/buildx/debug/ |
+| rootless モード | Docker Desktop では前提が変わる | https://docs.docker.com/engine/security/rootless/ |
+| イメージ署名 | 配布の信頼性という別の層の話 | https://docs.docker.com/engine/security/trust/ |
+| overlay / macvlan ネットワーク | 複数ホストや特殊な環境が前提 | https://docs.docker.com/engine/network/drivers/ |
+| Windows コンテナ | macOS では検証できない | https://learn.microsoft.com/virtualization/windowscontainers/ |
+| 実行時の脅威検知 | 運用フェーズの別分野 | https://falco.org/docs/ |
 
 ---
 
-## 8. 実行順（何をどの順で呼ぶか）
+## 10. 実行順
 
-**全43回の呼び出し**で完走する。1回の応答で1モード（`_prompt.md` §1）。上から順に打てばよい。
-
-| # | 呼び出し | 出力先 |
-| --- | --- | --- |
-| 1–6 | `M1: P0 ステップ1` 〜 `6` | `docs/p0-foundations.md` / `docs/01-glossary.md` |
-| 4–8 | `M1: P1 ステップ1` 〜 `5` | `docs/p1-container-basics.md` |
-| 9 | `M2: P1` | 同上（ブランクページ再現 + 宿題 Lv1〜3）|
-| 10–14 | `M1: P2 ステップ1` 〜 `5` | `docs/p2-dockerfile.md` / `app/` / `Dockerfile` |
-| 15 | **`MP: PJ1`** | `projects/basic-dockerfile/` |
-| 16 | `M2: P2` | `docs/p2-dockerfile.md`（宿題は Lv1・Lv2 のみ）|
-| 17–20 | `M1: P3 ステップ1` 〜 `4` | `docs/p3-storage-network.md` |
-| 21 | `M2: P3` | 同上（Lv1〜3）|
-| 22–27 | `M1: P4 ステップ1` 〜 `6` | `docs/p4-compose.md` / `compose.yaml` |
-| 28 | **`MP: PJ2`** | `projects/multi-container-service/` |
-| 29 | `M2: P4` | `docs/p4-compose.md`（Lv1・Lv2）|
-| 30–34 | `M1: P5 ステップ1` 〜 `5` | `docs/p5-optimize.md` |
-| 35 | **`MP: PJ3`** | `projects/multiservice-docker/` |
-| 36 | `M2: P5` | `docs/p5-optimize.md`（Lv1・Lv2）|
-| 37–41 | `M1: P6 ステップ1` 〜 `5`（**任意**）| `docs/p6-cicd.md` |
-| 42 | **`MP: PJ4`**（任意）| `projects/dockerized-service-deployment/` |
-| 43 | `M2: P6`（任意）→ 最後に `M3` | `docs/p6-cicd.md` / `docs/99-uncovered.md` |
-
-- **P0 に `M2` は無い**（再現すべき設定ファイルがまだ無いため）
-- **`M2` は MP の後**。プロジェクトで詰まった箇所が宿題の題材になる
-- **ブランクページ再現は M2 を受け取った翌日**に実施する（`_prompt.md` §8.1）
-- P6 をやらない場合は #36 の後に `M3` へ飛ぶ。その際 §5 の5トピックが未消化として M3 に載る
-
-### 8.0 やさしい言葉で書くルール（全ステップ必須）★
-
-**専門用語をそのまま置かない。** 正式名称は必ず書く（エラーメッセージや公式ドキュメントに出るため）が、**その場で必ず言い換えを添える**。
-
-**(1) 初めて出す用語には `🧒 かみくだくと` を必ず付ける**
-
-```markdown
-> 🧒 **かみくだくと**: カーネル = パソコンの「管理人さん」。
-> アプリが「ファイルを開きたい」「メモリがほしい」と頼むと、代わりにやってくれる。
+```text
+P0 （3ステップ）                 確認
+P1 （5ステップ）→ M2             確認
+P2 （5ステップ）→ PJ1 → M2       確認
+P3 （4ステップ）→ M2             確認
+P4 （6ステップ）→ PJ2 → M2       確認
+P5 （4ステップ）→ M2             確認
+P6 （4ステップ）→ PJ3 → M2       確認
+P7 （4ステップ）→ PJ4 → M2       確認
+M3
 ```
 
-**(2) 文章の書き方**
+AI はコードを読者のリポジトリへ置かず、作業用の場所で教材どおりに打って検証する。
 
-- 1文を短く。**1文に「、」は2つまで**
-- 「〜であり、〜のため、〜という設計」のような積み重ねをしない。文を分ける
-- カタカナ語を出したら、その直後に日本語で言い換える
-- 主語を省かない。「誰が」「何を」するのかを毎回書く
+---
 
-**(3) 教材ぜんたいで使う共通のたとえ: 引っ越し**
+## 11. 確定した判断（2026-11-01）
 
-比喩を毎回変えない。同じ1つを育てて使い回す。
-
-| たとえ | 実際のもの | 初出 |
-| --- | --- | --- |
-| 家の土台・水道・電気 | **カーネル**（= OS の下半分） | P0-1 |
-| 内装・家具・道具 | **OS の上半分**（コマンド、共有ライブラリ） | P0-1 |
-| 家一式（土台 + 内装） | **OS**（基本ソフト）。カーネルはその一部 | P0-1 |
-| 荷物 | アプリそのもの | P0-1 |
-| 荷造りした段ボール（封をしてある） | イメージ | P0-1 → P0-3 |
-| 箱を開けて生活を始めた部屋 | コンテナ | P0-1 |
-| 引っ越し先の建物 | ホスト | P0-1 |
-| 段ボールの置き場・配送センター | レジストリ | P0-3 |
-| 箱に貼るラベル | タグ | P0-3 |
-| 荷物を層ごとに積む | レイヤ | P2-3 |
-
-**(4) 分量について**
-
-`_prompt.md` §6.3 の「2,000字程度」は、**やさしく書くことを優先して緩める**（読み手の判断。2026-09-21）。
-ただし無駄に長くはしない。**難しい言葉を短く書く**より**やさしい言葉で少し長く書く**方を選ぶ、という意味。
-
-**(5) 図を入れるルール**
-
-言葉で3回言い直すより図が速いときは、必ず図を入れる。ただし飾りの図は入れない。
-
-- **入れる基準**: 「**積み重なり**」「**入れ子**」「**順番**」「**分かれ道**」のどれかを説明するとき
-- **形式**: **罫線による図**（```` ``` ```` で囲む）を既定とする。GitHub でもエディタでも必ず同じに見え、差分が読め、後から直せるため。画像ファイルは使わない
-- **作り方**: 日本語は半角の2倍幅なので、**必ず表示幅を計算してから書く**。`unicodedata.east_asian_width` で全行の幅がそろうことを確認する。目視で揃えない
-- **図には必ず直後に1〜2行の読み方を付ける**。「この図のどこを見てほしいか」を書く
-- 流れが枝分かれする図（P0-2 の `docker` コマンドの旅など）は Mermaid の `flowchart` を使ってよい。GitHub が描画する
-
-**(6) なぜなぜで最後までつなぐ ★ この教材の背骨**
-
-**知識を並べない。問いを連ねる。** 読み手の要望（2026-09-21）。
-
-**(6-a) 各ステップは「問い」で始める**
-
-冒頭に `**❓ この回の問い**` を必ず置く。しかもその問いは、**前の回の答えから生まれたもの**にする。
-
-```markdown
-**❓ この回の問い**: P0-2 の答えは「下 ＝ OS の上半分と下半分」だった。
-→ **では、そのうちどこまでを運べばよいのか？**
-```
-
-「今回は◯◯を学びます」と書かない。**前回の答えを1行で示し、そこから出てくる次の問いを書く。**
-
-**(6-b) ステップの中も「なぜ」を重ねる**
-
-仕組み解剖（N-2）は、事実を並べるのではなく**3〜5回「なぜ」を下る**形で書く。
-
-```
-なぜコンテナは速いのか
-  → カーネルを起動し直さないから
-      → なぜ起動し直さなくてよいのか
-          → 下にあるものを借りているから
-              → なぜ借りられるのか
-                  → 上半分と下半分が分かれていて、下半分は共通だから
-```
-
-**(6-c) ステップの最後は「次のなぜ」を残して終える**
-
-答えを全部渡して終えない。**次の問いが立った状態**で終える。`⏭️ 後で回収` は、そのための道具。
-P0-1 が「この土台には名前がある。次回明かす」で終えたのがこの形。
-
-**(6-d) フェーズの最後に、なぜなぜの鎖を1枚の図にする**
-
-各フェーズの最終回で、そのフェーズの問いと答えを縦につないだ図を置く（P0-6 の 6-1 がその見本）。
-**ばらばらに覚えたものが1本道だったと分かる**のが、この図の目的。
-
-**(6-e) どこで掘るのをやめるか ★**
-
-「なぜ」は無限に続けられるので、**止める条件を決めておく**。次のどちらかに当たったら、そこで止める。
-
-| 止める条件 | そのときどうするか |
+| 項目 | 決定 |
 | --- | --- |
-| **答えが `【到達点】` の4つのどれにも効かなくなった** | 止めて、`docs/99-uncovered.md`（M3）に送る |
-| **答えが「そう決まっているから」になった**（仕様・歴史的経緯） | 一次情報の URL を出して止める。`_prompt.md` §4.5(b) |
-
-例: 「なぜカーネルは特権を持てるのか」→ CPU の動作モードの話になり、到達点のどれにも効かない → **止めて M3 へ**。
-掘りすぎは、認知負荷を上げるだけで到達点に近づかない。**止めるのも設計のうち。**
-
-**(7) 出力前の自己点検（M1 / MP のたびに必ず通す）**
-
-`_prompt.md` §10 の点検に、次を**追加**する。1つでも ✗ なら直してから出す。
-
-- [ ] 冒頭に `❓ この回の問い` があり、それが**前の回の答えから生まれた問い**になっているか
-- [ ] 仕組み解剖が、事実の羅列ではなく**「なぜ」を3回以上下る形**になっているか
-- [ ] 末尾で**次の問いが立った状態**になっているか（答えを全部渡して終えていないか）
-- [ ] 掘りすぎていないか。**到達点に効かない「なぜ」は M3 に送ったか**
-- [ ] 初めて出した専門用語すべてに `🧒 かみくだくと` が付いているか
-- [ ] **図やコード例の中に出てくる言葉**も点検したか（本文だけ見て済ませない。`ゲスト OS` はここで漏れた）
-- [ ] **回避策を、仕組み上の必要と混ぜていないか。** 環境の都合でやる手順は「回避策」と明記する（`docker pull` を必須手順のように書いてしまった）
-- [ ] **新しいコマンドを出したら「何のために使うのか」を書いたか。** 実演のためだけに打たせない。実務で使う場面を1つ以上示す（`docker top` はここで漏れた）
-- [ ] **`ホスト` と書いた箇所で、読み手が「この Mac のこと？」と迷わないか。** 迷いそうなら §8.0 の約束を思い出させる1行を添える
-- [ ] **コマンドの出力に出てきた見慣れない固有名詞**を説明したか（自分が書いた文だけ見て済ませない。`Debian` はここで漏れた）
-- [ ] 初出トークンは **Docker / Linux / その他** の3系統で数えたか（上限3つは Docker 側のみ）
-- [ ] カタカナ語を出しっぱなしにしていないか（直後に日本語で言い換えたか）
-- [ ] 1文に読点が3つ以上ある文が無いか
-- [ ] たとえを新しく作っていないか（引っ越しのたとえを使い回したか）
-- [ ] 「積み重なり」「入れ子」「順番」「分かれ道」を**言葉だけ**で説明していないか
-- [ ] 図を入れたなら、**全行の表示幅が揃うことを計算で確認**したか。図の直後に読み方を1〜2行付けたか
-- [ ] `docs/01-glossary.md` に、そのステップの初出用語を「🧒 かみくだくと」列込みで追記したか
-- [ ] 小学生が読んで詰まる語が残っていないか。声に出して読んで確かめる
-- [ ] **「このコマンドは○○を見ている」と言い切った箇所に、証拠を見せているか。** 言い切りで済ませず、出力そのものの中に根拠が出るコマンドを併記する（例: `uname -r` が本当にカーネルの版かは `uname -v` の出力で確かめられる）
-- [ ] 教材に貼る出力に、**パソコン名やユーザ名などの個人情報**が混ざっていないか（`uname -a`、`hostname` などに注意）
-- [ ] **図の中のどの部分が、いま説明している言葉なのかを図に書き込んだか。** 図を出して名前を並べるだけでは、どれがどれか分からない（`仮想マシン` と `仮想化ソフト` はここで混ざった）
-- [ ] **名前が似ている2語を出したら、必ず「何が違うか」の表を付けたか**
-- [ ] **数を書いたら、その数が「何の数」かを取り違えていないか。** 問いと答えの範囲を一致させる（例: 「パソコンに入っているコマンドは何個？」に `/bin` だけの37個で答えるのは誤り。実際は約1,400個）
-
-### 8.1 教材側の進行ナビ（M1 / MP 生成時の必須要素）
-
-**次に何をすればよいかを、毎回教材の側が指示する。** 読み手が計画表を見に戻らなくて済むようにする。
-
-各ステップの**末尾**（`N-8` 初出トークンの回収確認の後）に、次の1行を必ず置く:
-
-```markdown
----
-▶ **次**: `M1: P2 ステップ4` — ビルドキャッシュを効かせる
-```
-
-フェーズ最後のステップでは、代わりにプロジェクトへの誘導ブロックを置く:
-
-```markdown
----
-## ▶ ここで PJ1 に取り組む
-
-P2 はここまで。**次は自分で組む番**。
-
-`MP: PJ1` を呼ぶと、要件・判定基準・詰まったときの確認順が出る（解答は折りたたまれている）。
-
-**前提チェック**（すべて ✅ なら着手してよい）
-- [ ] `docker build` が自分の手で通せる（P2-1）
-- [ ] `COPY` と `WORKDIR` の違いを説明できる（P2-2）
-- [ ] 3行目だけ変えたときどこから再ビルドされるか予測できる（P2-4）
-- [ ] `docker stop` が10秒待たされる理由を説明できる（P2-5）
-
-1つでも ✅ にできない項目があれば、**該当ステップの 🔬 仕組み解剖だけ**読み返してから着手する。
-```
-
-プロジェクトが無いフェーズ（P0・P1・P3）は、代わりに `M2: P1` などフェーズ末パックへ誘導する。
-MP 回の末尾には `▶ **次**: \`M2: P2\`（フェーズ末パック）` を置く。
-
----
-
-## 次にやること
-
-```
-M1: P0 ステップ1
-```
-
-P0-1 から順に生成する。1回の応答で1ステップ。
-P0 の3ステップを終えてから P1-1（`docker run`）に入る。
-以降は**各ステップの末尾に出る `▶ 次` の行**に従えばよい（§8.1）。
+| Django の経験 | 触ったことがある。Django はファイルの役割を短く説明し、Docker の説明に分量を回す |
+| Django のバージョン | 5.2 LTS |
+| デプロイ | 疑似サーバで手を動かせるようにし、VPS がなくても読んで理解できる形にする |
+| リポジトリ構成 | §3 のモノレポ。PJ3 は EC 全体で提出し、ほかは `projects/` に置く |
