@@ -1,118 +1,25 @@
 # roadmap-sh-docker
 
-Docker の学習リポジトリ。**1リポジトリで完結させる** — 教材は `docs/`、題材アプリは `app/`、プロジェクト成果物は `projects/`。
+[roadmap.sh/docker](https://roadmap.sh/docker) をもとに、Docker の仕組みから本番デプロイまでを学ぶ教材。
+購入できない EC アプリを題材に、コンテナを1つずつ増やしていく。
 
-## 到達点
+## 状態
 
-1. 任意のアプリを Dockerfile でイメージ化できる
-2. 複数コンテナを compose で連携させ、データを永続化できる
-3. イメージサイズと起動時間を意図して削減できる
-4. コンテナが落ちた・繋がらないときに、ログとプロセスから原因の層を特定できる
+**M0 学習計画: 承認済み**。**P0: 確認待ち**。
 
-## 使い方
-
-教材はモード制で1回に1つずつ生成する。詳細は `docs/_prompt.md` §1。
-
-**次に呼ぶもの**:
-
-```
-M1: P0 ステップ1
-```
-
-学習計画（M0）は生成済み。全体像は [`docs/00-plan.md`](docs/00-plan.md) を見る。
-
-## 🔖 次回はここから
-
-```
-M1: P4 ステップ1
-```
-
-**compose.yaml に置き換える**（P4 開始）。P3-4 で打った10行近いコマンドを1つのファイルにまとめ、`docker compose up` の1行で起動できるようにする。
-
-**中断時点（2026-09-27）の状態**
-
-| | 状態 |
-| --- | --- |
-| P0・P1・P2・P3 | ✅ 修了 |
-| PJ1（提出物） | ✅ 完成・push 済み。roadmap.sh へ提出可能 |
-| P4 | 未着手 0/6 ← **次はここ** |
-
-**やり残していること**（急ぎではない。いつやってもよい）
-
-- **M2: P2 の宿題 Lv1・Lv2** — `~/tmp/lv1` に `Dockerfile` を置くところで止まっている。Lv2（`docker stop` が10秒かかる理由を `SigCgt` で説明して直す）は P4-3 の前にやると効く
-- **`app/main.py` の戻し** — P3-2 のホットリロード実験の値（`"リロードされました。"`）が残っている。PJ1 の判定基準 B-1 は `{"status":"ok"}` なので、必要なら戻す
-- **用語集** — `docs/01-glossary.md` の「🧒 かみくだくと」列が未記入。P0-6 の課題
+- 学習計画: [`docs/00-plan.md`](docs/00-plan.md)
+- 生成ルール: [`docs/_prompt.md`](docs/_prompt.md)
+- 単元素材: [`docs/_roadmap-docker-source.md`](docs/_roadmap-docker-source.md)
 
 ## 進捗
 
-**M0 学習計画: ✅ 完了（2026-09-20 / 改訂 2026-09-21）** → [`docs/00-plan.md`](docs/00-plan.md)
-全36ステップ + プロジェクト4本（P6 を除くと31ステップ + 3本）。
-
-| Ph | 内容 | ステップ | 状態 | プロジェクト | 出力先 |
-|---|---|---|---|---|---|
-| P0 | 基礎 / アーキテクチャ / 用語 | 6 | ✅ **修了 6/6** | — | `docs/p0-foundations.md` |
-| P1 | コンテナとは / CLI 基礎 | 5 | ✅ **修了 5/5 + M2** | — | `docs/p1-container-basics.md` |
-| P2 | Dockerfile / レイヤ | 5 | ✅ **修了 5/5 + PJ1 + M2** | PJ1 | `docs/p2-dockerfile.md` |
-| P3 | 永続化 / ネットワーク | 4 | ✅ **修了 4/4** | — | `docs/p3-storage-network.md` |
-| P4 | Docker Compose | 6 | 未着手 0/6 | PJ2 | `docs/p4-compose.md` |
-| P5 | 最適化 / セキュリティ | 5 | 未着手 0/5 | PJ3 | `docs/p5-optimize.md` |
-| P6 | レジストリ / CI/CD（任意） | 5 | 未着手 0/5 | PJ4 | `docs/p6-cicd.md` |
-
-各フェーズは「M1 × ステップ数 → MP（あれば）→ M2 フェーズ末パック」の順に進める。
-P0 だけは M2 を付けない（再現すべき設定ファイルがまだ無いため）。
-最後に M3 で `docs/99-uncovered.md` を作る。
-
-用語は [`docs/01-glossary.md`](docs/01-glossary.md) に集約する。P0-3 で骨格を作り、以降のステップで初出トークンを1行ずつ追記していく。
-
-### プロジェクト
-
-出典を読んだうえで、**前提知識が揃う地点**から実施タイミングを確定済み（[`docs/00-plan.md`](docs/00-plan.md) §6.1）。
-各プロジェクトは**教材側から「▶ ここで PJ1 に取り組む」と前提チェック付きで指示が出る**ので、タイミングを自分で判断する必要はない。
-
-| PJ | 名前 | プロジェクトURL | ディレクトリ | いつ | 状態 |
-|---|---|---|---|---|---|
-| PJ1 | Basic Dockerfile | https://roadmap.sh/projects/basic-dockerfile | [`projects/basic-dockerfile`](projects/basic-dockerfile) | P2-5 の直後 | **完成** |
-| PJ2 | Multi-Container Application | https://roadmap.sh/projects/multi-container-service | [`projects/multi-container-service`](projects/multi-container-service) | P4-6 の直後 | 未着手 |
-| PJ3 | Multi-Service Application | https://roadmap.sh/projects/multiservice-docker | [`projects/multiservice-docker`](projects/multiservice-docker) | P5-5 の直後 | 未着手 |
-| PJ4 | Dockerized Service Deployment | https://roadmap.sh/projects/dockerized-service-deployment | [`projects/dockerized-service-deployment`](projects/dockerized-service-deployment) | P6-5 の直後（任意） | 未着手 |
-
-**roadmap.sh への提出要件**: 公開リポジトリであること / README があること / **README にプロジェクトURLが書かれていること**。各プロジェクトの README と、この README の両方に URL を載せている。
-
-出典の要件は一部を取捨している（PJ2 の Terraform / Ansible は PJ4 へ、PJ3 の React は省略 など）。詳細は §6.1。
-
-## 実行順
-
-```
-M1: P0 ステップ1 〜 6   ✅ 修了
-M1: P1 ステップ1 〜 5   →  M2: P1
-M1: P2 ステップ1 〜 5   →  MP: PJ1  →  M2: P2
-M1: P3 ステップ1 〜 4   →  M2: P3
-M1: P4 ステップ1 〜 6   →  MP: PJ2  →  M2: P4
-M1: P5 ステップ1 〜 5   →  MP: PJ3  →  M2: P5
-M1: P6 ステップ1 〜 5   →  MP: PJ4  →  M2: P6   （任意）
-M3
-```
-
-各ステップの末尾に `▶ 次: ...` が出るので、それに従えばよい。全体表は [`docs/00-plan.md`](docs/00-plan.md) §8。
-
-## 題材アプリ
-
-`app/` に**最小の FastAPI アプリを新規に作る**（P2-2 で `/health` のみ → P3-4 で MySQL 接続を追加）。
-別リポジトリのアプリは持ち込まない。理由と方針は [`docs/00-plan.md`](docs/00-plan.md) §3.1。
-
-`Dockerfile` / `compose.yaml` はリポジトリのルートに実ファイルとして置き、同じ内容を教材にも全文掲載する。
-
-## 環境
-
-✅ 検証済み（2026-09-20）: Docker Desktop 4.81.0 / Docker Engine 29.6.1 / Docker Compose v5.2.0 / macOS (darwin/arm64)
-
-## メモ
-
-- 各ステップの末尾に `📇 まとめカード` がある。**翌日はそれだけ見返す**
-- 各ステップは `❓ この回の問い` から始まる。**前の回の答えから生まれた問い**になっていて、フェーズ全体が1本のなぜなぜでつながる（`docs/00-plan.md` §8.0(6)）
-- 1回で覚えることは1つだけ。新しい言葉は4つまで（`docs/00-plan.md` §4 の P0 設計メモ）
-- プロジェクトは**先に自力で組む**。解答例は `<details>` に隠れているので、開く前に判定基準で自己採点する
-- ブランクページ再現は**翌日**にやる
-- ステップごとにコミットする（どこで壊れたか追えるように）
-- 詰まったら `projects/*/README.md` の「詰まった記録」に残す（到達点4の素材になる）
-- Engine 29.x の `docker images` に `SIZE` 列は無い。`DISK USAGE` / `CONTENT SIZE` で読む
+| Ph | 内容 | ステップ | プロジェクト | 状態 |
+| --- | --- | --- | --- | --- |
+| P0 | なぜコンテナか / Docker の構造 | 3 | — | 確認待ち |
+| P1 | コンテナ操作 / 隔離の仕組み | 5 | — | 未着手 |
+| P2 | Dockerfile / レイヤ / PID 1 | 5 | PJ1 | 未着手 |
+| P3 | volume / network / DB 接続 | 4 | — | 未着手 |
+| P4 | Compose で EC を組み上げる | 6 | PJ2 | 未着手 |
+| P5 | サイズ削減 / マルチステージ | 4 | — | 未着手 |
+| P6 | 本番構成 / セキュリティ / 運用 | 4 | PJ3 | 未着手 |
+| P7 | レジストリ / CI/CD / デプロイ | 4 | PJ4（任意） | 未着手 |

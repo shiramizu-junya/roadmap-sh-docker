@@ -1,10 +1,9 @@
 # roadmap.sh/docker 単元素材
 
 出典: https://github.com/kamranahmedse/developer-roadmap
-取得日: 2026-09-20
+取得: 2026-11-01（コミット 491a0e3）
 
-> 各トピックの本文は数行と短い。教材化の素材ではなく、
-> 「扱う範囲」の定義として使う（_prompt.md §2.2）。
+> 各トピックの本文は短い。教材化の素材ではなく「扱う範囲」の定義として使う。解説の素材は各トピックが張る公式ドキュメントとする。
 
 ---
 
@@ -21,6 +20,8 @@ Visit the following resources to learn more:
 - [@article@Container Design Patterns](https://kubernetes.io/blog/2016/06/container-design-patterns/)
 - [@article@Twelve-Factor App Methodology](https://12factor.net/)
 - [@video@Microservices vs Monolith Architecture](https://www.youtube.com/watch?v=GBTdnfD6s5Q)
+---
+
 ## bare-metal-vs-vms-vs-containers@3hatcMVLDbMuz73uTx-9P
 
 # Bare Metal vs VM vs Containers
@@ -32,6 +33,8 @@ Visit the following resources to learn more:
 - [@article@History of Virtualization](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/01-history-and-motivation/03-history-of-virtualization)
 - [@article@Bare Metal Machine](https://glossary.cncf.io/bare-metal-machine/)
 - [@article@What is a Virtual Machine?](https://azure.microsoft.com/en-au/resources/cloud-computing-dictionary/what-is-a-virtual-machine)
+---
+
 ## basics-of-docker@kIqx7Inf50mE9W0juwNBz
 
 # Docker Basics
@@ -65,6 +68,11 @@ Below are some essential Docker commands you'll use frequently:
 *   `docker container stop <container>`: Stop a running container.
 *   `docker container rm <container>`: Remove a stopped container.
 *   `docker image rm <image>`: Remove an image from your local machine.
+*   `docker logs -f <container>`: View live output and logs from a running container.
+*   `docker exec -it <container> sh`: Open an interactive terminal session inside a running container.
+
+---
+
 ## bind-mounts@wZcCW1ojGzUakHCv2AaI1
 
 # Bind Mounts
@@ -74,6 +82,8 @@ Bind mounts have limited functionality compared to volumes. When you use a bind 
 Visit the following resources to learn more:
 
 - [@official@Docker Bind Mounts](https://docs.docker.com/storage/bind-mounts/)
+---
+
 ## building-container-images@5OEfBQaYNOCi999x6QUqW
 
 # Building Container Images
@@ -86,6 +96,8 @@ Visit the following resources to learn more:
 - [@official@Docker Image Builder](https://docs.docker.com/reference/cli/docker/buildx/build/)
 - [@official@Dockerfile Reference](https://docs.docker.com/engine/reference/builder/)
 - [@opensource@Dockerfile Examples](https://github.com/dockersamples)
+---
+
 ## cgroups@fRl4EfNwlBiidzn3IV34-
 
 # cgroups
@@ -97,6 +109,8 @@ Visit the following resources to learn more:
 - [@official@Control Groups](https://www.docker.com/resources/what-container/#control-groups)
 - [@article@Control Groups - Medium](https://medium.com/@furkan.turkal/how-does-docker-actually-work-the-hard-way-a-technical-deep-diving-c5b8ea2f0422)
 - [@video@An introduction to cgroups, runc & containerD](https://www.youtube.com/watch?v=u1LeMndEk70)
+---
+
 ## command-line-utilities@YzpB7rgSR4ueQRLa0bRWa
 
 # Command Line Utilities
@@ -108,6 +122,8 @@ Visit the following resources to learn more:
 - [@official@Docker Images](https://docs.docker.com/engine/reference/commandline/images/)
 - [@official@Docker Run](https://docs.docker.com/reference/cli/docker/container/run/)
 - [@official@Docker Pull](https://docs.docker.com/engine/reference/commandline/pull/)
+---
+
 ## container-registries@3VKPiMfbGBxv9m_SljIQV
 
 # Container Registries
@@ -121,6 +137,9 @@ Visit the following resources to learn more:
 - [@official@Artifact Registry](https://cloud.google.com/artifact-registry)
 - [@official@Amazon ECR](https://aws.amazon.com/ecr/)
 - [@official@Azure Container Registry](https://azure.microsoft.com/en-in/products/container-registry)
+- [@course@Docker Tag, Push & Pull: Push Images to a Registry (Hands-on)](https://prepare.sh/tutorial/docker-tag-push-pull-push-images-to-a-registry)
+---
+
 ## container-security@78YFahP3Fg-c27reLkuK4
 
 # Container Security
@@ -132,6 +151,8 @@ Visit the following resources to learn more:
 - [@official@Docker Security](https://docs.docker.com/engine/security/)
 - [@article@Kubernetes Security Best Practices](https://www.aquasec.com/cloud-native-academy/kubernetes-in-production/kubernetes-security-best-practices-10-steps-to-securing-k8s/)
 - [@course@Container Security Labs: Privileged Containers, Daemon Exposure, Image Layers](https://ransomleak.com/catalogue/cloud-security/)
+---
+
 ## containers@jhwe-xfVc-C7qy8YuS5dZ
 
 # Containers
@@ -142,6 +163,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker CLI Commands](https://docs.docker.com/engine/reference/commandline/cli/)
 - [@article@Docker CLI Commands Cheat Sheet](https://docs.docker.com/get-started/docker_cheatsheet.pdf)
+---
+
 ## continuous-integration@oyqw4tr-taZcxt5kREh1g
 
 # Continuous Integration (CI)
@@ -159,7 +182,8 @@ For containers, there are a number of things we may want to do:
 Visit the following resources to learn more:
 
 - [@article@Continuous Integration - Docker](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/11-development-workflow/04-continuous-integration-github-actions)
-- [@feed@Explore top posts about CI/CD](https://app.daily.dev/tags/cicd?ref=roadmapsh)
+---
+
 ## data-persistence@uUPYXmwu27SBPqKZx6U_q
 
 # Data Persistence in Docker
@@ -169,6 +193,9 @@ Docker enables you to run containers that are isolated pieces of code, including
 Visit the following resources to learn more:
 
 - [@official@Data Persistence - Docker Documentation](https://docs.docker.com/get-started/docker-concepts/running-containers/persisting-container-data/)
+- [@course@Docker Volumes vs Bind Mounts: How to Persist Container Data (Hands-on)](https://prepare.sh/tutorial/docker-volumes-vs-bind-mounts-how-to-persist-container-data)
+---
+
 ## databases@jKSE_wKYf4P9wnSh_LkMi
 
 # Using Databases
@@ -179,6 +206,8 @@ Visit the following resources to learn more:
 
 - [@official@Containerized Databases](https://docs.docker.com/guides/use-case/databases/)
 - [@video@How to Setup MySQL Database with Docker](https://www.youtube.com/watch?v=igc2zsOKPJs)
+---
+
 ## debuggers@LiAV9crrTHhLqeZhD25a2
 
 # Debuggers in Docker
@@ -189,6 +218,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Buildx Debug](https://docs.docker.com/reference/cli/docker/buildx/debug/)
 - [@article@Debuggers in Docker](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/11-development-workflow/02-debug-and-test)
+---
+
 ## deploying-containers@qXOGqORi3EdqwsP9Uhi9m
 
 # Deploying Containers
@@ -197,9 +228,10 @@ Deploying containers is a crucial step in using Docker and containerization to m
 
 Visit the following resources to learn more:
 
-- [@official@Docker Deployment](https://docs.docker.com/guides/orchestration/)
 - [@official@Docker Compose](https://docs.docker.com/compose/)
 - [@official@Docker Swarm](https://docs.docker.com/engine/swarm/)
+---
+
 ## developer-experience@hHXTth0ZP8O-iMGR9xfu9
 
 # Developer Experience
@@ -210,6 +242,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Developer Experience](https://www.docker.com/blog/cto-chat-overcoming-the-developer-experience-gap-feat-redmonk-flow-io/)
 - [@article@Developer Experience Wishlist - Docker](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/11-development-workflow/00-devx-wishlist#key-devx-features)
+---
+
 ## docker-and-oci@43drPbTwPqJQPyzwYUdBT
 
 # Docker and OCI
@@ -220,6 +254,8 @@ Visit the following resources to learn more:
 
 - [@official@Open Container Initiative](https://opencontainers.org/)
 - [@article@OCI - Wikipedia](https://en.wikipedia.org/wiki/Open_Container_Initiative)
+---
+
 ## docker-cli@b-LwyYiegbF0jIrn7HYRv
 
 # Docker CLI
@@ -230,6 +266,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker CLI](https://docs.docker.com/reference/cli/docker/)
 - [@official@Docker Compose](https://docs.docker.com/compose/)
+---
+
 ## docker-compose@jjA9E0J8N2frfeJCNtA1m
 
 # Docker Compose
@@ -240,7 +278,10 @@ Visit the following resources to learn more:
 
 - [@official@Docker Compose documentation](https://docs.docker.com/compose/)
 - [@opensource@Curated Docker Compose Samples](https://github.com/docker/awesome-compose?tab=readme-ov-file)
+- [@course@Docker Compose: Run an App + Database with One Command (Hands-on)](https://prepare.sh/tutorial/docker-compose-run-an-app-database-with-one-command)
 - [@video@Docker Compose Tutorial](https://www.youtube.com/watch?v=DM65_JyGxCo)
+---
+
 ## docker-desktop-winmaclinux@NCdsPRhJy7UtQFNLo1J1f
 
 # Docker Desktop
@@ -252,7 +293,8 @@ Visit the following resources to learn more:
 - [@official@Docker Desktop Documentation](https://docs.docker.com/desktop/)
 - [@official@Docker Get Started Guide](https://docs.docker.com/get-started/)
 - [@official@Docker Hub](https://hub.docker.com/)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+---
+
 ## docker-engine--linux@0NKqLUWtJMlXn-m6wpA6f
 
 # Docker Engine
@@ -264,7 +306,8 @@ Visit the following resources to learn more:
 - [@official@Docker Engine Installation Guide](https://docs.docker.com/engine/install/)
 - [@official@Docker Engine - Docker Documentation](https://docs.docker.com/engine/)
 - [@video@Docker Engine for Linux Servers Setup and Tips](https://www.youtube.com/watch?v=YeF7ObTnDwc)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+---
+
 ## docker-run@6eu5NRA1sJuaHTlHtNurc
 
 # Running Containers
@@ -274,6 +317,9 @@ The `docker run` command creates and starts a new container from a specified ima
 Visit the following resources to learn more:
 
 - [@official@Docker Run](https://docs.docker.com/engine/reference/commandline/run/)
+- [@course@Docker Run Flags Explained: -p, -e, --name, logs & exec (Hands-on)](https://prepare.sh/tutorial/docker-run-flags-explained-p-e-name-logs-exec)
+---
+
 ## docker-swarm@ks6PFN-0Z9zH7gtWaWgxz
 
 # Docker Swarm
@@ -283,6 +329,8 @@ Docker Swarm is Docker’s native container orchestration tool that allows users
 Visit the following resources to learn more:
 
 - [@official@Docker Swarm](https://docs.docker.com/engine/swarm/)
+---
+
 ## dockerfiles@yGRQcx64S-yBGEoOeMc55
 
 # Dockerfile
@@ -294,6 +342,9 @@ Visit the following resources to learn more:
 - [@official@Dockerfile Reference](https://docs.docker.com/engine/reference/builder/)
 - [@official@Dockerfile Best Practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
 - [@opensource@Dockerfile Examples](https://github.com/dockersamples)
+- [@course@How to Write a Dockerfile: Containerize a Python Flask App (Hands-on)](https://prepare.sh/tutorial/how-to-write-a-dockerfile-containerize-a-python-flask-app)
+---
+
 ## dockerhub@rxVR62_yXIjc-L4GFSV6u
 
 # DockerHub
@@ -305,6 +356,8 @@ Visit the following resources to learn more:
 - [@official@DockerHub](https://hub.docker.com/)
 - [@official@DockerHub Repositories](https://docs.docker.com/docker-hub/repos/)
 - [@official@DockerHub Webhooks](https://docs.docker.com/docker-hub/webhooks/)
+---
+
 ## efficient-layer-caching@frshJqVMP8D7o_7tMZMPI
 
 # Efficient Layer Caching
@@ -314,7 +367,10 @@ When building container images, Docker caches the newly created layers. These la
 Visit the following resources to learn more:
 
 - [@official@Docker Layer Caching](https://docs.docker.com/build/cache/)
+- [@course@Docker Fundamentals: Layers, Directives & Port Mapping (Hands-on)](https://prepare.sh/tutorial/docker-fundamentals-layers-directives-port-mapping)
 - [@video@Layer Caching](https://www.youtube.com/watch?v=_nMpndIyaBU)
+---
+
 ## ephemeral-container-filesystem@086zZYjtzdCaDHm-MkSqg
 
 # Ephemeral FS
@@ -325,6 +381,8 @@ Visit the following resources to learn more:
 
 - [@official@Data Persistence - Docker Documentation](https://docs.docker.com/get-started/docker-concepts/running-containers/persisting-container-data/)
 - [@video@Docker Concepts - Persisting container data](https://www.youtube.com/watch?v=10_2BjqB_Ls)
+---
+
 ## hot-reloading@4p5d3rzCHy4vjg2PRX-2k
 
 # Hot Reloading in Docker
@@ -334,6 +392,8 @@ Even though we can speed up the image building with layer caching enable, we don
 Visit the following resources to learn more:
 
 - [@article@Hot Reloading - Docker](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/11-development-workflow/01-hot-reloading)
+---
+
 ## image-security@M5UG-ZcyhBPbksZd0ZdNt
 
 # Image Security
@@ -345,6 +405,9 @@ Visit the following resources to learn more:
 - [@official@Docker Content Trust](https://docs.docker.com/engine/security/trust/content_trust/)
 - [@official@Docker Hub](https://hub.docker.com/)
 - [@course@Secrets in Image Layers: Hands-on Exercise](https://ransomleak.com/exercises/secrets-in-image-layers/)
+- [@course@Docker Image Security: Best Practices & CVE Scanning (Hands-on)](https://prepare.sh/tutorial/docker-image-security-best-practices-cve-scanning)
+---
+
 ## image-size-and-security@-8wAzF6_3gruiM3VYMvB0
 
 # Reducing Image Size
@@ -355,7 +418,9 @@ Visit the following resources to learn more:
 
 - [@official@Multi-stage builds](https://docs.docker.com/build/building/multi-stage/)
 - [@official@Docker Best Practices](https://docs.docker.com/develop/develop-images/dockerfile_best-practices/)
-- [@feed@Explore top posts about Security](https://app.daily.dev/tags/security?ref=roadmapsh)
+- [@course@Docker Multi-Stage Builds & Image Optimization (Hands-on)](https://prepare.sh/tutorial/docker-multi-stage-builds-image-optimization)
+---
+
 ## image-tagging-best-practices@Vs4WQwgJFhA63U9Gf2ym0
 
 # Image Tagging Best Practices
@@ -367,6 +432,8 @@ Visit the following resources to learn more:
 - [@official@Docker Tags](https://docs.docker.com/get-started/docker-concepts/building-images/build-tag-and-publish-an-image/)
 - [@article@Docker Image Tagging Best Practices](https://medium.com/@nirmalkushwah08/docker-image-tagging-strategy-4aa886fb4fcc)
 - [@article@Semantic Versioning](https://semver.org/)
+---
+
 ## images@3Nsg-F3wMKEzEsXw1MBZv
 
 # Docker Images
@@ -377,6 +444,8 @@ Visit the following resources to learn more:
 
 - [@article@What's the Difference Between Docker Images and Containers?](https://aws.amazon.com/compare/the-difference-between-docker-images-and-containers/)
 - [@video@What is an image?](https://www.youtube.com/watch?v=NyvT9REqLe4)
+---
+
 ## installation--setup@01nDXqxVdMv4SeXc0nYHH
 
 # Installation Setup
@@ -387,6 +456,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Desktop website](https://www.docker.com/products/docker-desktop)
 - [@official@Docker Engine](https://docs.docker.com/engine/install/)
+---
+
 ## introduction@Py9nst2FDJ1_hoXeX_qSF
 
 # What is Docker?
@@ -397,6 +468,9 @@ Visit the following resources to learn more:
 
 - [@official@Docker](https://www.docker.com/)
 - [@official@Docker Docs](https://docs.docker.com/)
+- [@course@Introduction to Docker: Containers, Images & Your First Container (Hands-on)](https://prepare.sh/tutorial/introduction-to-docker-containers-images-your-first-container)
+---
+
 ## kubernetes@RqXpX2XabtHYVjgg1EZR_
 
 # Kubernetes
@@ -407,6 +481,8 @@ Visit the following resources to learn more:
 
 - [@official@Kubernetes](https://kubernetes.io/)
 - [@official@Docker Swarm](https://docs.docker.com/engine/swarm/)
+---
+
 ## namespaces@BvV8VCX39wRB-g8WvGF1g
 
 # What are Namespaces?
@@ -417,6 +493,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Namespaces](https://docs.docker.com/engine/security/userns-remap/)
 - [@article@Linux Namespaces](https://man7.org/linux/man-pages/man7/namespaces.7.html)
+---
+
 ## networks@w5QjzvOaciK2rotOkjvjQ
 
 # Docker Networks
@@ -427,7 +505,10 @@ Visit the following resources to learn more:
 
 - [@official@Docker Networks](https://docs.docker.com/network/)
 - [@official@Docker Network Commands](https://docs.docker.com/engine/reference/commandline/network/)
+- [@course@Docker Networking Explained: Connect Containers by Name (Hands-on)](https://prepare.sh/tutorial/docker-networking-explained-connect-containers-by-name)
 - [@video@Docker Networking](https://www.youtube.com/watch?v=bKFMS5C4CG0)
+---
+
 ## nomad@r1eJZDZYouUjnGwAtRbyU
 
 # Nomad: Deploying Containers
@@ -437,6 +518,8 @@ Nomad is a cluster manager and scheduler that enables you to deploy, manage and 
 Visit the following resources to learn more:
 
 - [@official@Nomad Documentation](https://www.nomadproject.io/docs)
+---
+
 ## others-ghcr-ecr-gcr-acr-etc@fh5aERX7c-lY9FPsmftoF
 
 # DockerHub Alternatives
@@ -450,6 +533,8 @@ Visit the following resources to learn more:
 - [@official@Amazon ECR](https://aws.amazon.com/ecr/)
 - [@official@Azure Container Registry](https://azure.microsoft.com/en-in/products/container-registry)
 - [@official@GitHub Container Registry](https://docs.github.com/en/packages/guides/about-github-container-registry)
+---
+
 ## paas-options@PP_RRBo_pThe2mgf6xzMP
 
 # PaaS Options for Deploying Containers
@@ -463,6 +548,8 @@ Visit the following resources to learn more:
 - [@official@Google Cloud Run](https://cloud.google.com/run)
 - [@official@IBM Cloud Code Engine](https://www.ibm.com/cloud/code-engine)
 - [@official@Amazon Elastic Container Service](https://aws.amazon.com/ecs/)
+---
+
 ## package-managers@mw-weCutd2ECKlx2DE_ZJ
 
 # Package Managers
@@ -474,7 +561,8 @@ Visit the following resources to learn more:
 - [@article@APT Package Manager Guide](https://ubuntu.com/server/docs/package-management)
 - [@article@Alpine Linux Package Management](https://wiki.alpinelinux.org/wiki/Alpine_Package_Keeper)
 - [@video@Linux Package Managers Explained](https://www.youtube.com/watch?v=-iSMFoPPbKU)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+
+---
 
 ## programming-languages@XxT9UUjbKW1ARyERSLH_W
 
@@ -488,7 +576,8 @@ Visit the following resources to learn more:
 - [@roadmap@JavaScript Roadmap](https://roadmap.sh/javascript)
 - [@roadmap@Java Roadmap](https://roadmap.sh/java)
 - [@roadmap@Go Roadmap](https://roadmap.sh/golang)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+
+---
 
 ## running-containers@z2eeBXPzo-diQ67Fcfyhc
 
@@ -502,6 +591,8 @@ Visit the following resources to learn more:
 - [@official@Docker Containers](https://docs.docker.com/engine/reference/commandline/container/)
 - [@official@Docker Exec](https://docs.docker.com/engine/reference/commandline/exec/)
 - [@official@Docker Stop](https://docs.docker.com/engine/reference/commandline/stop/)
+---
+
 ## runtime-configuration-options@mAaEz-bwB5DLaBbOSYGMn
 
 # Runtime Configuration Options
@@ -512,6 +603,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Documentation](https://docs.docker.com/engine/reference/run/)
 - [@article@Docker Runtime Arguments](https://galea.medium.com/docker-runtime-arguments-604593479f45)
+---
+
 ## runtime-security@vYug8kcwrMoWf8ft4UDNI
 
 # Runtime Security
@@ -523,6 +616,8 @@ Visit the following resources to learn more:
 - [@official@Docker Security](https://docs.docker.com/engine/security/)
 - [@official@Docker Security Best Practices](https://docs.docker.com/build/building/best-practices/)
 - [@course@Privileged Containers: Hands-on Escape Exercise](https://ransomleak.com/exercises/privileged-containers/)
+---
+
 ## shell-commands@W5kX5jn49hghRgkEw6_S3
 
 # Shell Commands
@@ -534,7 +629,8 @@ Visit the following resources to learn more:
 - [@article@Linux Command Line Basics](https://www.freecodecamp.org/news/the-linux-commands-handbook/)
 - [@article@Shell Commands Every Developer Should Know](https://www.codecademy.com/article/command-line-commands)
 - [@video@Linux Commands for Beginners](https://www.youtube.com/watch?v=ZtqBQ68cfJc)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+
+---
 
 ## shell-scripting@InlMtuaUJ9EXO-OD9x1jj
 
@@ -547,7 +643,8 @@ Visit the following resources to learn more:
 - [@article@Shell Scripting Tutorial](https://www.shellscript.sh/)
 - [@article@Bash Scripting Tutorial for Beginners](https://linuxconfig.org/bash-scripting-tutorial-for-beginners)
 - [@video@Bash Scripting Full Course](https://www.youtube.com/watch?v=tK9Oc6AEnR4)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+
+---
 
 ## tests@Kmyo1_Mor9WHLkRhNShRZ
 
@@ -558,7 +655,8 @@ We want to run tests in an environment as similar as possible to production, so 
 Visit the following resources to learn more:
 
 - [@article@Running Tests - Docker](https://courses.devopsdirective.com/docker-beginner-to-pro/lessons/11-development-workflow/03-tests)
-- [@feed@Explore top posts about Testing](https://app.daily.dev/tags/testing?ref=roadmapsh)
+---
+
 ## underlying-technologies@jrH1qE6EnFXL4fTyYU8gR
 
 # Underlying Technologies
@@ -570,6 +668,8 @@ Visit the following resources to learn more:
 - [@official@Underlying Technologies](https://www.docker.com/resources/what-container/#underlying-technologies)
 - [@article@Underlying Technologies - Medium](https://medium.com/@furkan.turkal/how-does-docker-actually-work-the-hard-way-a-technical-deep-diving-c5b8ea2f0422)
 - [@video@Containers - Namespaces, Cgroups and Overlay Filesystem](https://www.youtube.com/watch?v=wJdDWc6zO4U)
+---
+
 ## union-filesystems@vEUfw_vobshuZI0-q8RZo
 
 # Union Filesystems
@@ -582,6 +682,8 @@ Visit the following resources to learn more:
 - [@article@OverlayFS (Overlay Filesystem)](https://www.kernel.org/doc/html/latest/filesystems/overlayfs.html)
 - [@article@Btrfs (B-Tree Filesystem)](https://btrfs.readthedocs.io/en/stable/)
 - [@article@ZFS (Z File System)](https://zfsonlinux.org/)
+---
+
 ## users--groups-permissions@uKjB2qntFTpPuYUT9sdxd
 
 # Users / Groups Permissions
@@ -593,7 +695,8 @@ Visit the following resources to learn more:
 - [@article@Linux File Permissions Explained](https://www.redhat.com/en/blog/linux-file-permissions-explained)
 - [@article@Users and Groups in Linux](https://wiki.archlinux.org/title/Users_and_groups)
 - [@official@Dockerfile USER Instruction](https://docs.docker.com/reference/dockerfile/#user)
-- [@feed@Explore top posts about Docker](https://app.daily.dev/tags/docker?ref=roadmapsh)
+
+---
 
 ## using-3rd-party-container-images@LShK3-1EGGuXnEvdScFR7
 
@@ -605,6 +708,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Hub Registry](https://hub.docker.com/)
 - [@course@Malicious Base Images: Hands-on Exercise](https://ransomleak.com/exercises/malicious-base-images/)
+---
+
 ## volume-mounts@woemCQmWTR-hIoWAci3d5
 
 # Volume Mounts
@@ -616,6 +721,8 @@ Visit the following resources to learn more:
 - [@official@Docker Volumes](https://docs.docker.com/storage/volumes/)
 - [@official@Docker Volume Flags](https://docs.docker.com/storage/bind-mounts/#choose-the--v-or---mount-flag)
 - [@video@Docker Volumes explained in 6 minutes](https://www.youtube.com/watch?v=p2PH_YPCsis)
+---
+
 ## volumes@eHtVLB6v3h7hatJb-9cZK
 
 # Docker Volumes
@@ -626,6 +733,8 @@ Visit the following resources to learn more:
 
 - [@official@Docker Volumes](https://docs.docker.com/storage/volumes/)
 - [@official@Docker Volume Commands](https://docs.docker.com/engine/reference/commandline/volume/)
+---
+
 ## what-are-containers@74JxgfJ_1qmVNZ_QRp9Ne
 
 # What are Containers?
@@ -636,7 +745,8 @@ Visit the following resources to learn more:
 
 - [@course@Introduction to Containers - AWS Skill Builder](https://explore.skillbuilder.aws/learn/course/106/introduction-to-containers)
 - [@official@What is a Container?](https://www.docker.com/resources/what-container/)
-- [@feed@Explore top posts about Containers](https://app.daily.dev/tags/containers?ref=roadmapsh)
+---
+
 ## why-do-we-need-containers@i4ijY3T5gLgNz0XqRipXe
 
 # Need for Containers

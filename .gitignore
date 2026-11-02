@@ -1,12 +1,11 @@
-.DS_Store
 .env
-*.log
-
-# Python（uv が作るもの）
-# .venv は環境ごとに作り直すもの。uv.lock があれば uv sync で再現できる
-.venv/
+.env.*
+!.env.example
+secrets/
 __pycache__/
-*.pyc
-
-# M2 のブランクページ再現で書く練習用ファイル（コミットしない）
-Dockerfile.blank
+.venv/
+node_modules/
+dist/
+media/
+staticfiles/
+.DS_Store
