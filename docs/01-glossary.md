@@ -17,3 +17,14 @@
 | OCI | Open Container Initiative | 段ボールの規格の団体 | イメージと実行方法の標準を定める団体 | P0-3 | |
 | containerd | containerd | コンテナの管理係 | コンテナの一生を管理するランタイム | P0-3 | |
 | runc | runc | コンテナの組み立て係 | OCI の仕様に沿ってコンテナを作る低レベルランタイム | P0-3 | |
+| ポート | port | 建物の部屋番号 | 通信の届け先のプログラムを分ける番号 | P1-1 | |
+| タグ | tag | 箱に貼るラベル | イメージの版や種類を示す名前 | P1-1 | |
+| Docker Hub | Docker Hub | 大きな配送センター | Docker 社が運営する公開レジストリ | P1-2 | |
+| 標準出力 | standard output | 画面に向けて出す文字 | プログラムの通常の出力先。`docker logs` で読める | P1-3 | |
+| PID | process ID | プロセスの出席番号 | プロセスに付く番号 | P1-4 | |
+| UID | user ID | ユーザの番号 | Linux がユーザを識別する番号 | P1-4 | |
+| namespace | Linux namespace | 部屋の壁 | プロセスごとに見える範囲を分けるカーネルの機能 | P1-4 | |
+| cgroup | control group | 部屋ごとの電気の上限 | CPU やメモリの使用量を制限するカーネルの機能 | P1-4 | |
+| OOM Kill | Out Of Memory Kill | メモリ切れの強制終了 | メモリ不足のときにカーネルがプロセスを終了させること | P1-4 | |
+| 書き込み層 | container layer | 一番上の透明フィルム | コンテナごとの書き込み可能な層 | P1-5 | |
+| overlay | OverlayFS | 透明フィルムの重なり | 複数のディレクトリを重ねて1つに見せるファイルシステム | P1-5 | |
