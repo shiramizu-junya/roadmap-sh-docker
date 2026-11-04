@@ -5,4 +5,4 @@ api = NinjaAPI()
 
 @api.get("/health")
 def health(request):
-    return {"status": "ok"}
+    return {"status": "ok", "version": "2"}
