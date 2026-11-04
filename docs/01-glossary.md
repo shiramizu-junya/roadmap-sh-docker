@@ -28,3 +28,13 @@
 | OOM Kill | Out Of Memory Kill | メモリ切れの強制終了 | メモリ不足のときにカーネルがプロセスを終了させること | P1-4 | |
 | 書き込み層 | container layer | 一番上の透明フィルム | コンテナごとの書き込み可能な層 | P1-5 | |
 | overlay | OverlayFS | 透明フィルムの重なり | 複数のディレクトリを重ねて1つに見せるファイルシステム | P1-5 | |
+| Dockerfile | Dockerfile | 荷造りの手順書 | イメージの作り方を上から順に書いたファイル | P2-1 | |
+| Debian | Debian | Linux の配布形態の1つ | `python:3.13-slim` の土台になっている Linux ディストリビューション | P2-1 | |
+| 作業ディレクトリ | working directory | 今いる場所 | コマンドの相対パスの起点になる場所。Dockerfile では `WORKDIR` で決める | P2-2 | |
+| レイヤ | image layer | 荷物を層ごとに積んだもの | Dockerfile の命令が作る、読み取り専用のファイルの差分 | P2-3 | |
+| ロックファイル | lockfile | 入れた版の明細書 | 依存の版を固定して記録するファイル。本教材では `uv.lock` | P2-3 | |
+| ビルドコンテキスト | build context | 箱に入れる材料の置き場 | `docker build` に渡す、材料のファイル一式 | P2-4 | |
+| ビルドキャッシュ | build cache | 前回の荷造りの記録 | 同じ結果になる命令で、前の層を使い回す仕組み | P2-4 | |
+| BuildKit | BuildKit | ビルドの実行係 | Docker の中でイメージをビルドする部品 | P2-4 | |
+| PID 1 | PID 1 | 箱の中の最初のプロセス | コンテナの寿命を決め、`docker stop` のシグナルを受けるプロセス | P2-5 | |
+| シグナル | signal | カーネルからの短い合図 | プロセスに渡す通知。SIGTERM は終了のお願い、SIGKILL は強制終了 | P2-5 | |
