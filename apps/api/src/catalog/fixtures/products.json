@@ -1,0 +1,29 @@
+[
+    {
+        "model": "catalog.product",
+        "pk": 1,
+        "fields": {
+            "name": "木のマグカップ",
+            "price": 2800,
+            "description": "手彫りのマグカップ"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 2,
+        "fields": {
+            "name": "麻のトートバッグ",
+            "price": 3500,
+            "description": "丈夫な麻の生地"
+        }
+    },
+    {
+        "model": "catalog.product",
+        "pk": 3,
+        "fields": {
+            "name": "陶器の小皿",
+            "price": 1200,
+            "description": "5枚セット"
+        }
+    }
+]
