@@ -1,0 +1,30 @@
+services:
+    db:
+        image: mysql:8.4
+        environment:
+            MYSQL_ROOT_PASSWORD: root-pass
+            MYSQL_DATABASE: ec
+            MYSQL_USER: ec
+            MYSQL_PASSWORD: ec-pass
+        volumes:
+            - db-data:/var/lib/mysql
+        networks:
+            - back
+
+    api:
+        image: ec-api:step7
+        ports:
+            - "8000:8000"
+        environment:
+            DB_HOST: db
+            DB_NAME: ec
+            DB_USER: ec
+            DB_PASSWORD: ec-pass
+        networks:
+            - back
+
+volumes:
+    db-data:
+
+networks:
+    back:
