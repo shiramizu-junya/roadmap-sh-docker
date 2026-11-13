@@ -19,3 +19,5 @@ DATABASES = {
         "PASSWORD": os.environ["DB_PASSWORD"],
     }
 }
+
+REDIS_URL = os.environ["REDIS_URL"]

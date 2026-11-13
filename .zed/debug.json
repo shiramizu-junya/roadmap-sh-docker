@@ -1,0 +1,15 @@
+[
+  {
+    "label": "Docker API: コンテナにアタッチ（DEBUGPY=1 docker compose up api）",
+    "adapter": "Debugpy",
+    "request": "attach",
+    "connect": { "host": "127.0.0.1", "port": 5678 },
+    "pathMappings": [
+      {
+        "localRoot": "$ZED_WORKTREE_ROOT/apps/api",
+        "remoteRoot": "/app"
+      }
+    ],
+    "justMyCode": true
+  }
+]

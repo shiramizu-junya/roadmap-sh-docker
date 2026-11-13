@@ -1,6 +1,8 @@
 services:
     db:
         image: mysql:8.4
+        ports:
+            - "127.0.0.1:3306:3306"
         environment:
             MYSQL_ROOT_PASSWORD: root-pass
             MYSQL_DATABASE: ec
@@ -21,17 +23,27 @@ services:
         depends_on:
             db:
                 condition: service_healthy
+            redis:
+                condition: service_started
         ports:
             - "8000:8000"
+            - "127.0.0.1:5678:5678"   # debugpy（Zed からアタッチ）。自分の Mac からだけ繋がる
+        env_file:
+            - ./apps/api/.env
         environment:
-            DB_HOST: db
-            DB_NAME: ec
-            DB_USER: ec
-            DB_PASSWORD: ec-pass
+            # DEBUGPY=1 docker compose up api で起動したときだけデバッガを有効にする
+            DEBUGPY: ${DEBUGPY:-0}
         volumes:
             - ./apps/api/src:/app/src
         networks:
             - front
+            - back
+
+    redis:
+        image: redis:8-alpine
+        ports:
+            - "127.0.0.1:6379:6379"   # GUI ツール（Redis Insight など）用。自分の Mac からだけ繋がる
+        networks:
             - back
 
     web:
