@@ -58,23 +58,23 @@ docker build -t ec-api:step7 apps/api
 
 ```yaml
 services:
-  db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: root-pass
-      MYSQL_DATABASE: ec
-      MYSQL_USER: ec
-      MYSQL_PASSWORD: ec-pass
+    db:
+        image: mysql:8.4
+        environment:
+            MYSQL_ROOT_PASSWORD: root-pass
+            MYSQL_DATABASE: ec
+            MYSQL_USER: ec
+            MYSQL_PASSWORD: ec-pass
 
-  api:
-    image: ec-api:step7
-    ports:
-      - "8000:8000"
-    environment:
-      DB_HOST: db
-      DB_NAME: ec
-      DB_USER: ec
-      DB_PASSWORD: ec-pass
+    api:
+        image: ec-api:step7
+        ports:
+            - "8000:8000"
+        environment:
+            DB_HOST: db
+            DB_NAME: ec
+            DB_USER: ec
+            DB_PASSWORD: ec-pass
 ```
 
 > 🐧 **Linux注**: YAML は、字下げで入れ子を表す設定ファイルの書き方です。字下げは**空白**で書きます。タブを使うとエラーになります。
@@ -142,13 +142,13 @@ Installed 3 object(s) from 1 fixture(s)
 
 ### 1-2. 🔬 仕組み解剖
 
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `compose.yaml` | Compose ファイル | 動かしたいコンテナの一覧を書いた設計図。Compose はこれを読んで、Docker デーモンに `docker run` 相当の依頼を出す |
-| `services:` | サービスの定義 | 1つのサービスが、1種類のコンテナを表す。キーの名前（`db`、`api`）がサービス名になる |
-| `docker compose up -d` | 起動 | 足りないネットワーク・コンテナを作り、起動する。すでに同じ設定で動いているものには手を付けない |
-| `docker compose down` | 停止と削除 | コンテナと、Compose が作ったネットワークを消す。**volume とイメージは消さない** |
-| `image:` `ports:` `environment:` | （補助） | それぞれ `docker run` の最後のイメージ名、`-p`、`-e` と同じ |
+| 部品                             | 正式名称         | 実行時に何が起きるか                                                                                            |
+| -------------------------------- | ---------------- | --------------------------------------------------------------------------------------------------------------- |
+| `compose.yaml`                   | Compose ファイル | 動かしたいコンテナの一覧を書いた設計図。Compose はこれを読んで、Docker デーモンに `docker run` 相当の依頼を出す |
+| `services:`                      | サービスの定義   | 1つのサービスが、1種類のコンテナを表す。キーの名前（`db`、`api`）がサービス名になる                             |
+| `docker compose up -d`           | 起動             | 足りないネットワーク・コンテナを作り、起動する。すでに同じ設定で動いているものには手を付けない                  |
+| `docker compose down`            | 停止と削除       | コンテナと、Compose が作ったネットワークを消す。**volume とイメージは消さない**                                 |
+| `image:` `ports:` `environment:` | （補助）         | それぞれ `docker run` の最後のイメージ名、`-p`、`-e` と同じ                                                     |
 
 > 🧒 **かみくだくと**: Compose = 引っ越しの「段取り表」。どの段ボール（イメージ）を、どの部屋（コンテナ）で、どの設定で開けるかを1枚に書いておく。サービス = 段取り表の1行。「DB の部屋」「API の部屋」のような、部屋の役割です。
 
@@ -183,11 +183,11 @@ Compose は、**プロジェクト**ごとに名前の付いたネットワー�
 
 > 🧒 **かみくだくと**: プロジェクト = 1枚の段取り表で建てた部屋のまとまり。Compose は、名前の頭にプロジェクト名を付けて、ほかのまとまりと混ざらないようにします。
 
-| 何に付く名前か | 決まり方 | 例 |
-| --- | --- | --- |
-| コンテナ | プロジェクト名-サービス名-番号 | `roadmap-sh-docker-api-1` |
-| ネットワーク | プロジェクト名_default | `roadmap-sh-docker_default` |
-| サービス名（DNS で引ける名前） | `services:` のキー | `db`、`api` |
+| 何に付く名前か                 | 決まり方                       | 例                          |
+| ------------------------------ | ------------------------------ | --------------------------- |
+| コンテナ                       | プロジェクト名-サービス名-番号 | `roadmap-sh-docker-api-1`   |
+| ネットワーク                   | プロジェクト名\_default        | `roadmap-sh-docker_default` |
+| サービス名（DNS で引ける名前） | `services:` のキー             | `db`、`api`                 |
 
 なぜを下っていきます。
 
@@ -200,13 +200,13 @@ Compose は、**プロジェクト**ごとに名前の付いたネットワー�
                   → Compose がプロジェクトごとに1つ作り、全サービスをつなぐから
 ```
 
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | `package.json` の `scripts` に近い。ただし Compose は「打つコマンド」ではなく「あるべき状態」を書く。`up` は、いまの状態をその形に合わせる |
-| **なぜこの設計か** | 複数のコンテナの設定を1か所に集め、リポジトリで共有できるようにするため |
-| **ビルド時かランタイム時か** | ランタイム。`compose.yaml` は `docker run` の代わりで、イメージは作らない（`build:` は P4-4） |
-| **ホストからの見え方** | `docker compose ps`。`docker ps` でも見えるが、ほかのコンテナと混ざる |
-| **失敗時の挙動** | YAML の字下げを間違えると、起動前に止まる。下の例 |
+| 確認すること                 | 内容                                                                                                                                       |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| **既知スタックとの対応**     | `package.json` の `scripts` に近い。ただし Compose は「打つコマンド」ではなく「あるべき状態」を書く。`up` は、いまの状態をその形に合わせる |
+| **なぜこの設計か**           | 複数のコンテナの設定を1か所に集め、リポジトリで共有できるようにするため                                                                    |
+| **ビルド時かランタイム時か** | ランタイム。`compose.yaml` は `docker run` の代わりで、イメージは作らない（`build:` は P4-4）                                              |
+| **ホストからの見え方**       | `docker compose ps`。`docker ps` でも見えるが、ほかのコンテナと混ざる                                                                      |
+| **失敗時の挙動**             | YAML の字下げを間違えると、起動前に止まる。下の例                                                                                          |
 
 ```text
 go-yaml load error in parser (while parsing a block mapping) at L2.C3-L4.C5: did not find expected key
@@ -291,13 +291,13 @@ docker volume ls --filter dangling=true
 
 ### 1-8. 初出トークンの回収確認
 
-| トークン | 扱い |
-| --- | --- |
-| `services:` | 1-1 で実践、1-2 で解剖 |
-| `docker compose up` | 1-1 で実践、1-2 で解剖 |
-| `docker compose down` | 1-2 で解剖、1-6 で確認 |
+| トークン                         | 扱い                                                         |
+| -------------------------------- | ------------------------------------------------------------ |
+| `services:`                      | 1-1 で実践、1-2 で解剖                                       |
+| `docker compose up`              | 1-1 で実践、1-2 で解剖                                       |
+| `docker compose down`            | 1-2 で解剖、1-6 で確認                                       |
 | `image:` `ports:` `environment:` | 1-2 で `docker run` と対応。`environment:` は ⏭️ P4-5 で回収 |
-| YAML | 1-1 の Linux注 |
+| YAML                             | 1-1 の Linux注                                               |
 
 ### 📇 まとめカード
 
@@ -306,6 +306,7 @@ docker volume ls --filter dangling=true
 **残った問い**: `down` するとデータが消えた。P3 では `-v ec-db-data:...` と書いた。Compose ではどこに書くのか。
 
 ---
+
 ▶ **次**: P4-2 volume と network を宣言する
 
 ---
@@ -342,35 +343,35 @@ docker volume rm 30cb90849685fedc9ecda817f82f77ec85a85d30c90bb9f6d1c28ea0ad3bcb9
 
 ```yaml
 services:
-  db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: root-pass
-      MYSQL_DATABASE: ec
-      MYSQL_USER: ec
-      MYSQL_PASSWORD: ec-pass
-    volumes:
-      - db-data:/var/lib/mysql
-    networks:
-      - back
+    db:
+        image: mysql:8.4
+        environment:
+            MYSQL_ROOT_PASSWORD: root-pass
+            MYSQL_DATABASE: ec
+            MYSQL_USER: ec
+            MYSQL_PASSWORD: ec-pass
+        volumes:
+            - db-data:/var/lib/mysql
+        networks:
+            - back
 
-  api:
-    image: ec-api:step7
-    ports:
-      - "8000:8000"
-    environment:
-      DB_HOST: db
-      DB_NAME: ec
-      DB_USER: ec
-      DB_PASSWORD: ec-pass
-    networks:
-      - back
+    api:
+        image: ec-api:step7
+        ports:
+            - "8000:8000"
+        environment:
+            DB_HOST: db
+            DB_NAME: ec
+            DB_USER: ec
+            DB_PASSWORD: ec-pass
+        networks:
+            - back
 
 volumes:
-  db-data:
+    db-data:
 
 networks:
-  back:
+    back:
 ```
 
 起動して、商品を入れます。
@@ -431,21 +432,21 @@ local     roadmap-sh-docker_db-data
 
 ### 2-2. 🔬 仕組み解剖
 
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| いちばん外の `volumes:` | トップレベルの volume 定義 | このプロジェクトで使う、名前付きの volume を宣言する。`up` のとき、無ければ作る |
-| サービスの中の `volumes:` | サービスの volume 指定 | **ランタイム**に、そのコンテナへ volume をマウントする。`-v` と同じ |
-| いちばん外の `networks:` | トップレベルのネットワーク定義 | このプロジェクトで使うネットワークを宣言する。`up` で作り、`down` で消す |
-| サービスの中の `networks:` | サービスのネットワーク指定 | そのコンテナを、どのネットワークにつなぐか。`--network` と同じ |
-| `docker compose ps` | サービスの一覧 | このプロジェクトのコンテナの状態を出す。`-a` で止まったものも出す |
+| 部品                       | 正式名称                       | 実行時に何が起きるか                                                            |
+| -------------------------- | ------------------------------ | ------------------------------------------------------------------------------- |
+| いちばん外の `volumes:`    | トップレベルの volume 定義     | このプロジェクトで使う、名前付きの volume を宣言する。`up` のとき、無ければ作る |
+| サービスの中の `volumes:`  | サービスの volume 指定         | **ランタイム**に、そのコンテナへ volume をマウントする。`-v` と同じ             |
+| いちばん外の `networks:`   | トップレベルのネットワーク定義 | このプロジェクトで使うネットワークを宣言する。`up` で作り、`down` で消す        |
+| サービスの中の `networks:` | サービスのネットワーク指定     | そのコンテナを、どのネットワークにつなぐか。`--network` と同じ                  |
+| `docker compose ps`        | サービスの一覧                 | このプロジェクトのコンテナの状態を出す。`-a` で止まったものも出す               |
 
 **名前が似ている2つの `volumes:`** を並べます。
 
-| | いちばん外の `volumes:` | サービスの中の `volumes:` |
-| --- | --- | --- |
-| 書く場所 | 行の頭（字下げなし） | サービスの下 |
-| 意味 | 倉庫を「建てる」宣言 | 部屋の扉を倉庫に「つなぐ」指定 |
-| `docker` コマンドでは | `docker volume create` | `docker run -v` |
+|                       | いちばん外の `volumes:` | サービスの中の `volumes:`      |
+| --------------------- | ----------------------- | ------------------------------ |
+| 書く場所              | 行の頭（字下げなし）    | サービスの下                   |
+| 意味                  | 倉庫を「建てる」宣言    | 部屋の扉を倉庫に「つなぐ」指定 |
+| `docker` コマンドでは | `docker volume create`  | `docker run -v`                |
 
 > 🧒 **かみくだくと**: いちばん外の `volumes:` は「この建物には `db-data` という貸し倉庫がある」という宣言。サービスの中の `volumes:` は「DB の部屋の扉を、その倉庫につなぐ」という工事の指示です。
 
@@ -472,13 +473,13 @@ volume db-data               残す                  消す
                   → ネットワークには何も保存されず、up でいつでも作り直せるから
 ```
 
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | 対応物なし。アプリのフレームワークは、DB の置き場所を作ったり消したりしない |
-| **なぜこの設計か** | 寿命の違うものを分ける（P3-1）。コンテナとネットワークは使い捨て、データは残す |
-| **ビルド時かランタイム時か** | ランタイム |
-| **ホストからの見え方** | `docker volume ls` と `docker network ls` に、`プロジェクト名_` の付いた名前で出る |
-| **失敗時の挙動** | サービスの中で使った volume をいちばん外に書き忘れると、起動前に止まる。下の例 |
+| 確認すること                 | 内容                                                                               |
+| ---------------------------- | ---------------------------------------------------------------------------------- |
+| **既知スタックとの対応**     | 対応物なし。アプリのフレームワークは、DB の置き場所を作ったり消したりしない        |
+| **なぜこの設計か**           | 寿命の違うものを分ける（P3-1）。コンテナとネットワークは使い捨て、データは残す     |
+| **ビルド時かランタイム時か** | ランタイム                                                                         |
+| **ホストからの見え方**       | `docker volume ls` と `docker network ls` に、`プロジェクト名_` の付いた名前で出る |
+| **失敗時の挙動**             | サービスの中で使った volume をいちばん外に書き忘れると、起動前に止まる。下の例     |
 
 ```text
 service "db" refers to undefined volume db-data: invalid compose project
@@ -541,11 +542,11 @@ volume ごと消えたので、表がありません。P4-3 は、この空の�
 
 ### 2-8. 初出トークンの回収確認
 
-| トークン | 扱い |
-| --- | --- |
-| `volumes:` | 2-1 で実践、2-2 で解剖 |
-| `networks:` | 2-1 で実践、2-2 で解剖。分ける理由は ⏭️ P4-4 で回収 |
-| `docker compose ps` | 2-1 で実践、2-2 で解剖 |
+| トークン            | 扱い                                                |
+| ------------------- | --------------------------------------------------- |
+| `volumes:`          | 2-1 で実践、2-2 で解剖                              |
+| `networks:`         | 2-1 で実践、2-2 で解剖。分ける理由は ⏭️ P4-4 で回収 |
+| `docker compose ps` | 2-1 で実践、2-2 で解剖                              |
 
 ### 📇 まとめカード
 
@@ -554,6 +555,7 @@ volume ごと消えたので、表がありません。P4-3 は、この空の�
 **残った問い**: ずっと「`db` を先に起動して、待ってから残りを起動する」と2回に分けてきた。1回の `up` ではだめなのか。
 
 ---
+
 ▶ **次**: P4-3 「起動した」の定義
 
 ---
@@ -599,10 +601,10 @@ db Up 15 seconds
 
 `(2002, "Can't connect to server on 'db'")` は、「`db` という名前は引けたが、3306 番が受け付けていない」という意味です。P3 で見た `(2005, "Unknown server host")` とは違います。
 
-| エラー | 意味 | どの層か |
-| --- | --- | --- |
-| `(2005, "Unknown server host 'db'")` | 名前が引けない | ネットワーク（DNS） |
-| `(2002, "Can't connect to server on 'db'")` | 名前は引けたが、相手が受け付けていない | 相手のプロセス |
+| エラー                                      | 意味                                   | どの層か            |
+| ------------------------------------------- | -------------------------------------- | ------------------- |
+| `(2005, "Unknown server host 'db'")`        | 名前が引けない                         | ネットワーク（DNS） |
+| `(2002, "Can't connect to server on 'db'")` | 名前は引けたが、相手が受け付けていない | 相手のプロセス      |
 
 直します。
 
@@ -673,13 +675,13 @@ db Up 9 seconds (healthy)
 
 ### 3-2. 🔬 仕組み解剖
 
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `healthcheck:` | ヘルスチェック | **ランタイム**に、Docker デーモンがコンテナの中で `test` のコマンドを `interval` ごとに実行する。終了コードが 0 なら healthy |
-| `test:` | 確かめるコマンド | `CMD` の後ろが、コンテナの中で実行される。ここでは `mysqladmin ping` |
-| `interval` `timeout` `retries` | 間隔・時間切れ・回数 | 2秒ごとに試す。5秒で応答が無ければ失敗。30回続けて失敗したら unhealthy |
-| `depends_on:` | 依存関係 | `api` は `db` のあとに起動する、という順番の指定 |
-| `condition: service_healthy` | 起動の条件 | `db` が healthy になるまで、`api` の起動を待たせる |
+| 部品                           | 正式名称             | 実行時に何が起きるか                                                                                                         |
+| ------------------------------ | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `healthcheck:`                 | ヘルスチェック       | **ランタイム**に、Docker デーモンがコンテナの中で `test` のコマンドを `interval` ごとに実行する。終了コードが 0 なら healthy |
+| `test:`                        | 確かめるコマンド     | `CMD` の後ろが、コンテナの中で実行される。ここでは `mysqladmin ping`                                                         |
+| `interval` `timeout` `retries` | 間隔・時間切れ・回数 | 2秒ごとに試す。5秒で応答が無ければ失敗。30回続けて失敗したら unhealthy                                                       |
+| `depends_on:`                  | 依存関係             | `api` は `db` のあとに起動する、という順番の指定                                                                             |
+| `condition: service_healthy`   | 起動の条件           | `db` が healthy になるまで、`api` の起動を待たせる                                                                           |
 
 > 🧒 **かみくだくと**: ヘルスチェック = 部屋の住人に、定期的に「元気？」と声をかける見回り。返事があれば healthy です。`depends_on` = 「DB の部屋の住人が返事をするまで、API の部屋は開けない」という段取りです。
 
@@ -723,13 +725,13 @@ docker inspect roadmap-sh-docker-db-1 --format '{{json .State.Health.Log}}' | he
                       → だから「準備できたか」を確かめるコマンドを、自分で渡す
 ```
 
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | フロントの E2E テストで「サーバが応答するまで待ってから始める」設定に近い。ただし、待つのは Docker 自身 |
-| **なぜこの設計か** | 「準備できた」の意味は、アプリごとに違う。Docker はそれを知らないので、確かめ方を利用者に任せる |
-| **ビルド時かランタイム時か** | ランタイム。Docker デーモンがコンテナの中でコマンドを実行する |
-| **ホストからの見え方** | `docker compose ps` の `(healthy)`、`docker inspect` の `.State.Health` |
-| **失敗時の挙動** | 30回続けて失敗すると unhealthy になり、`up` が下のエラーで止まる |
+| 確認すること                 | 内容                                                                                                    |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------- |
+| **既知スタックとの対応**     | フロントの E2E テストで「サーバが応答するまで待ってから始める」設定に近い。ただし、待つのは Docker 自身 |
+| **なぜこの設計か**           | 「準備できた」の意味は、アプリごとに違う。Docker はそれを知らないので、確かめ方を利用者に任せる         |
+| **ビルド時かランタイム時か** | ランタイム。Docker デーモンがコンテナの中でコマンドを実行する                                           |
+| **ホストからの見え方**       | `docker compose ps` の `(healthy)`、`docker inspect` の `.State.Health`                                 |
+| **失敗時の挙動**             | 30回続けて失敗すると unhealthy になり、`up` が下のエラーで止まる                                        |
 
 ```text
 dependency failed to start: container roadmap-sh-docker-db-1 is unhealthy
@@ -792,12 +794,12 @@ db Exited (0) 1 second ago
 
 ### 3-8. 初出トークンの回収確認
 
-| トークン | 扱い |
-| --- | --- |
+| トークン      | 扱い                   |
+| ------------- | ---------------------- |
 | `healthcheck` | 3-1 で実践、3-2 で解剖 |
-| `depends_on` | 3-1 で実践、3-2 で解剖 |
-| `condition` | 3-2 で解剖 |
-| 終了コード | 3-3 の Linux注 |
+| `depends_on`  | 3-1 で実践、3-2 で解剖 |
+| `condition`   | 3-2 で解剖             |
+| 終了コード    | 3-3 の Linux注         |
 
 ### 📇 まとめカード
 
@@ -806,6 +808,7 @@ db Exited (0) 1 second ago
 **残った問い**: API と DB は1回で起動できた。次は画面がほしい。でも、この Mac には Node.js が入っていない。
 
 ---
+
 ▶ **次**: P4-4 React の画面を足す
 
 ---
@@ -831,13 +834,13 @@ db Exited (0) 1 second ago
 
 React の画面を `apps/web/` に作ります。商品一覧を出すだけです。
 
-| ファイル | 役割 |
-| --- | --- |
-| `package.json` | 使う部品の一覧 |
-| `vite.config.js` | 開発サーバの設定。`/api` を API に中継する |
-| `index.html` | 画面の入口 |
-| `src/main.jsx` `src/App.jsx` | 画面のコード |
-| `Dockerfile` `.dockerignore` | イメージの作り方 |
+| ファイル                     | 役割                                       |
+| ---------------------------- | ------------------------------------------ |
+| `package.json`               | 使う部品の一覧                             |
+| `vite.config.js`             | 開発サーバの設定。`/api` を API に中継する |
+| `index.html`                 | 画面の入口                                 |
+| `src/main.jsx` `src/App.jsx` | 画面のコード                               |
+| `Dockerfile` `.dockerignore` | イメージの作り方                           |
 
 > 🧒 **かみくだくと**: Vite（ヴィート）= React のコードを、ブラウザで動く形にしながら配る道具。開発サーバ = 書き換えるとすぐ画面に反映してくれる、開発用の配り係です。
 
@@ -849,20 +852,20 @@ mkdir -p apps/web/src
 
 ```json
 {
-  "name": "ec-web",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "dev": "vite --host 0.0.0.0"
-  },
-  "dependencies": {
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1"
-  },
-  "devDependencies": {
-    "@vitejs/plugin-react": "^6.2.1",
-    "vite": "^8.3.6"
-  }
+    "name": "ec-web",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "vite --host 0.0.0.0"
+    },
+    "dependencies": {
+        "react": "^19.3.1",
+        "react-dom": "^19.3.1"
+    },
+    "devDependencies": {
+        "@vitejs/plugin-react": "^6.2.1",
+        "vite": "^8.3.6"
+    }
 }
 ```
 
@@ -875,13 +878,13 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
-  plugins: [react()],
-  server: {
-    proxy: {
-      // /api で始まるリクエストを、api サービスへ中継する
-      "/api": "http://api:8000",
+    plugins: [react()],
+    server: {
+        proxy: {
+            // /api で始まるリクエストを、api サービスへ中継する
+            "/api": "http://api:8000",
+        },
     },
-  },
 });
 ```
 
@@ -890,14 +893,14 @@ export default defineConfig({
 ```html
 <!doctype html>
 <html lang="ja">
-  <head>
-    <meta charset="UTF-8" />
-    <title>EC</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.jsx"></script>
-  </body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>EC</title>
+    </head>
+    <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.jsx"></script>
+    </body>
 </html>
 ```
 
@@ -916,26 +919,26 @@ createRoot(document.getElementById("root")).render(<App />);
 import { useEffect, useState } from "react";
 
 export default function App() {
-  const [products, setProducts] = useState([]);
+    const [products, setProducts] = useState([]);
 
-  useEffect(() => {
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then(setProducts);
-  }, []);
+    useEffect(() => {
+        fetch("/api/products")
+            .then((res) => res.json())
+            .then(setProducts);
+    }, []);
 
-  return (
-    <main>
-      <h1>商品一覧</h1>
-      <ul>
-        {products.map((p) => (
-          <li key={p.id}>
-            {p.name} — {p.price}円
-          </li>
-        ))}
-      </ul>
-    </main>
-  );
+    return (
+        <main>
+            <h1>商品一覧</h1>
+            <ul>
+                {products.map((p) => (
+                    <li key={p.id}>
+                        {p.name} — {p.price}円
+                    </li>
+                ))}
+            </ul>
+        </main>
+    );
 }
 ```
 
@@ -988,63 +991,63 @@ Dockerfile
 
 ```yaml
 services:
-  db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: root-pass
-      MYSQL_DATABASE: ec
-      MYSQL_USER: ec
-      MYSQL_PASSWORD: ec-pass
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
-      interval: 2s
-      timeout: 5s
-      retries: 30
-    volumes:
-      - db-data:/var/lib/mysql
-    networks:
-      - back
+    db:
+        image: mysql:8.4
+        environment:
+            MYSQL_ROOT_PASSWORD: root-pass
+            MYSQL_DATABASE: ec
+            MYSQL_USER: ec
+            MYSQL_PASSWORD: ec-pass
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+            interval: 2s
+            timeout: 5s
+            retries: 30
+        volumes:
+            - db-data:/var/lib/mysql
+        networks:
+            - back
 
-  api:
-    build: ./apps/api
-    depends_on:
-      db:
-        condition: service_healthy
-    ports:
-      - "8000:8000"
-    environment:
-      DB_HOST: db
-      DB_NAME: ec
-      DB_USER: ec
-      DB_PASSWORD: ec-pass
-    volumes:
-      - ./apps/api/src:/app/src
-    networks:
-      - front
-      - back
+    api:
+        build: ./apps/api
+        depends_on:
+            db:
+                condition: service_healthy
+        ports:
+            - "8000:8000"
+        environment:
+            DB_HOST: db
+            DB_NAME: ec
+            DB_USER: ec
+            DB_PASSWORD: ec-pass
+        volumes:
+            - ./apps/api/src:/app/src
+        networks:
+            - front
+            - back
 
-  web:
-    build: ./apps/web
-    ports:
-      - "5173:5173"
-    depends_on:
-      - api
-    networks:
-      - front
-    develop:
-      watch:
-        - action: sync
-          path: ./apps/web/src
-          target: /app/src
-        - action: rebuild
-          path: ./apps/web/package.json
+    web:
+        build: ./apps/web
+        ports:
+            - "5173:5173"
+        depends_on:
+            - api
+        networks:
+            - front
+        develop:
+            watch:
+                - action: sync
+                  path: ./apps/web/src
+                  target: /app/src
+                - action: rebuild
+                  path: ./apps/web/package.json
 
 volumes:
-  db-data:
+    db-data:
 
 networks:
-  front:
-  back:
+    front:
+    back:
 ```
 
 変えたところは3つです。
@@ -1141,14 +1144,14 @@ docker compose exec web grep -o '商品一覧[^<]*' src/App.jsx
 
 ### 4-2. 🔬 仕組み解剖
 
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `build: ./apps/web` | ビルドの指定 | **ビルド時**に、このフォルダをビルドコンテキストにして `docker build` する。`up --build` か、イメージが無いときに動く |
-| `docker compose exec` | サービスでのコマンド実行 | 動いているコンテナで、コマンドを追加で実行する。`docker exec` と同じだが、サービス名で指定できる |
-| `develop.watch` | 監視の設定 | `docker compose watch` が使う設定。`up` だけでは働かない |
-| `action: sync` | 同期 | `path` のファイルが変わったら、コンテナの `target` へ写す |
-| `action: rebuild` | 作り直し | `path` のファイルが変わったら、イメージを作り直し、コンテナを入れ替える |
-| `proxy` | プロキシ（Vite の設定） | ブラウザから来た `/api/...` を、Vite が `http://api:8000/api/...` に送り直す |
+| 部品                  | 正式名称                 | 実行時に何が起きるか                                                                                                  |
+| --------------------- | ------------------------ | --------------------------------------------------------------------------------------------------------------------- |
+| `build: ./apps/web`   | ビルドの指定             | **ビルド時**に、このフォルダをビルドコンテキストにして `docker build` する。`up --build` か、イメージが無いときに動く |
+| `docker compose exec` | サービスでのコマンド実行 | 動いているコンテナで、コマンドを追加で実行する。`docker exec` と同じだが、サービス名で指定できる                      |
+| `develop.watch`       | 監視の設定               | `docker compose watch` が使う設定。`up` だけでは働かない                                                              |
+| `action: sync`        | 同期                     | `path` のファイルが変わったら、コンテナの `target` へ写す                                                             |
+| `action: rebuild`     | 作り直し                 | `path` のファイルが変わったら、イメージを作り直し、コンテナを入れ替える                                               |
+| `proxy`               | プロキシ（Vite の設定）  | ブラウザから来た `/api/...` を、Vite が `http://api:8000/api/...` に送り直す                                          |
 
 > 🧒 **かみくだくと**: プロキシ = 取り次ぎ係。ブラウザは Vite にだけ頼み、Vite が裏で API に頼み直す。ブラウザは API の場所を知らなくて済みます。
 
@@ -1171,12 +1174,12 @@ db コンテナ（MySQL）        ネットワーク back
 
 `api` と `web` は、コードの届け方が違います。
 
-| | `api`（bind mount） | `web`（watch の sync） |
-| --- | --- | --- |
-| 何をつなぐか | Mac の `apps/api/src` を、そのまま `/app/src` に見せる | 変わったファイルを、コンテナの `/app/src` に写す |
-| コンテナの中のファイル | Mac と同じ実体 | 写した別の実体 |
-| 起動するコマンド | `docker compose up` だけでよい | `docker compose watch` が要る |
-| 依存の変更 | 手で `up --build` | `rebuild` で自動 |
+|                        | `api`（bind mount）                                    | `web`（watch の sync）                           |
+| ---------------------- | ------------------------------------------------------ | ------------------------------------------------ |
+| 何をつなぐか           | Mac の `apps/api/src` を、そのまま `/app/src` に見せる | 変わったファイルを、コンテナの `/app/src` に写す |
+| コンテナの中のファイル | Mac と同じ実体                                         | 写した別の実体                                   |
+| 起動するコマンド       | `docker compose up` だけでよい                         | `docker compose watch` が要る                    |
+| 依存の変更             | 手で `up --build`                                      | `rebuild` で自動                                 |
 
 `web` に bind mount を使わなかった理由があります。`apps/web` を丸ごとつなぐと、イメージの中の `/app/node_modules` が Mac 側のフォルダで隠れます。Mac 側には `node_modules` が無いので、Vite が起動できません。`src` だけを写せば、`node_modules` はイメージのものが使われます。
 
@@ -1191,13 +1194,13 @@ db コンテナ（MySQL）        ネットワーク back
                   → Vite がプロキシになり、同じネットワークの api へ送り直すから
 ```
 
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | `vite.config.js` の `server.proxy` は、ふだんの React 開発と同じ書き方。違うのは、相手が `localhost` ではなくサービス名である点 |
-| **なぜこの設計か** | 開発に要る道具をイメージに閉じ込める。誰の Mac でも同じ版の Node.js で動く |
-| **ビルド時かランタイム時か** | `build:` はビルド時。`exec` と `watch` はランタイム |
-| **ホストからの見え方** | `docker compose ps` に `web` が出る。`docker image ls` に `roadmap-sh-docker-web` と `roadmap-sh-docker-api` が出る |
-| **失敗時の挙動** | `proxy` の相手を `localhost:8000` にすると、`web` コンテナ自身の 8000 番を探して失敗し、`/api` が 502 になる |
+| 確認すること                 | 内容                                                                                                                            |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **既知スタックとの対応**     | `vite.config.js` の `server.proxy` は、ふだんの React 開発と同じ書き方。違うのは、相手が `localhost` ではなくサービス名である点 |
+| **なぜこの設計か**           | 開発に要る道具をイメージに閉じ込める。誰の Mac でも同じ版の Node.js で動く                                                      |
+| **ビルド時かランタイム時か** | `build:` はビルド時。`exec` と `watch` はランタイム                                                                             |
+| **ホストからの見え方**       | `docker compose ps` に `web` が出る。`docker image ls` に `roadmap-sh-docker-web` と `roadmap-sh-docker-api` が出る             |
+| **失敗時の挙動**             | `proxy` の相手を `localhost:8000` にすると、`web` コンテナ自身の 8000 番を探して失敗し、`/api` が 502 になる                    |
 
 ✅ 検証済み: Docker Compose v5.5.1。`"/api": "http://localhost:8000"` にすると、`curl` が 502 を返し、Vite のログに `http proxy error: /api/products` と `ECONNREFUSED` が出た。
 
@@ -1252,13 +1255,13 @@ db コンテナ（MySQL）        ネットワーク back
 
 ### 4-8. 初出トークンの回収確認
 
-| トークン | 扱い |
-| --- | --- |
-| `build:` | 4-1 で実践、4-2 で解剖 |
-| `docker compose exec` | 4-1 で実践、4-2 で解剖 |
-| `docker compose watch` | 4-1 で実践、4-2 で解剖、4-6 で確認 |
-| Vite、開発サーバ、プロキシ | 4-1 と 4-2 で解説 |
-| P4-2 の `networks:` を分ける理由 | 4-1 と 4-4 で回収 |
+| トークン                         | 扱い                               |
+| -------------------------------- | ---------------------------------- |
+| `build:`                         | 4-1 で実践、4-2 で解剖             |
+| `docker compose exec`            | 4-1 で実践、4-2 で解剖             |
+| `docker compose watch`           | 4-1 で実践、4-2 で解剖、4-6 で確認 |
+| Vite、開発サーバ、プロキシ       | 4-1 と 4-2 で解説                  |
+| P4-2 の `networks:` を分ける理由 | 4-1 と 4-4 で回収                  |
 
 ### 📇 まとめカード
 
@@ -1267,6 +1270,7 @@ db コンテナ（MySQL）        ネットワーク back
 **残った問い**: 設定が `compose.yaml` に直接書いてある。サービスが増えると、この塊はどこへ置けばよいのか。
 
 ---
+
 ▶ **次**: P4-5 Redis でカートを作る
 
 ---
@@ -1292,11 +1296,11 @@ db コンテナ（MySQL）        ネットワーク back
 
 カートの決まりは次のとおりです。
 
-| 項目 | 決まり |
-| --- | --- |
-| カートの区別 | 画面が作った ID を、`X-Cart-Id` ヘッダで送る |
-| Redis の置き方 | `cart:<ID>` というハッシュに、`商品番号 → 個数` を入れる |
-| API | `GET /api/cart` で中身を返し、`POST /api/cart/items` で1つ足す |
+| 項目           | 決まり                                                         |
+| -------------- | -------------------------------------------------------------- |
+| カートの区別   | 画面が作った ID を、`X-Cart-Id` ヘッダで送る                   |
+| Redis の置き方 | `cart:<ID>` というハッシュに、`商品番号 → 個数` を入れる       |
+| API            | `GET /api/cart` で中身を返し、`POST /api/cart/items` で1つ足す |
 
 #### API に Redis を足す
 
@@ -1515,56 +1519,63 @@ import { useEffect, useState } from "react";
 
 // カートの ID をブラウザに保存し、次に開いたときも同じカートを使う
 function getCartId() {
-  let id = localStorage.getItem("cartId");
-  if (!id) {
-    id = crypto.randomUUID();
-    localStorage.setItem("cartId", id);
-  }
-  return id;
+    let id = localStorage.getItem("cartId");
+    if (!id) {
+        id = crypto.randomUUID();
+        localStorage.setItem("cartId", id);
+    }
+    return id;
 }
 
-const headers = { "X-Cart-Id": getCartId(), "Content-Type": "application/json" };
+const headers = {
+    "X-Cart-Id": getCartId(),
+    "Content-Type": "application/json",
+};
 
 export default function App() {
-  const [products, setProducts] = useState([]);
-  const [cart, setCart] = useState({});
+    const [products, setProducts] = useState([]);
+    const [cart, setCart] = useState({});
 
-  useEffect(() => {
-    fetch("/api/products")
-      .then((res) => res.json())
-      .then(setProducts);
-    fetch("/api/cart", { headers })
-      .then((res) => res.json())
-      .then((data) => setCart(data.items));
-  }, []);
+    useEffect(() => {
+        fetch("/api/products")
+            .then((res) => res.json())
+            .then(setProducts);
+        fetch("/api/cart", { headers })
+            .then((res) => res.json())
+            .then((data) => setCart(data.items));
+    }, []);
 
-  function addToCart(productId) {
-    fetch("/api/cart/items", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({ product_id: productId }),
-    })
-      .then((res) => res.json())
-      .then((data) => setCart(data.items));
-  }
+    function addToCart(productId) {
+        fetch("/api/cart/items", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ product_id: productId }),
+        })
+            .then((res) => res.json())
+            .then((data) => setCart(data.items));
+    }
 
-  const count = Object.values(cart).reduce((sum, n) => sum + n, 0);
+    const count = Object.values(cart).reduce((sum, n) => sum + n, 0);
 
-  return (
-    <main>
-      <h1>商品一覧</h1>
-      <p>カート: {count} 点</p>
-      <ul>
-        {products.map((p) => (
-          <li key={p.id}>
-            {p.thumbnail_url && <img src={p.thumbnail_url} alt="" />}
-            {p.name} — {p.price}円
-            <button onClick={() => addToCart(p.id)}>カートに入れる</button>
-          </li>
-        ))}
-      </ul>
-    </main>
-  );
+    return (
+        <main>
+            <h1>商品一覧</h1>
+            <p>カート: {count} 点</p>
+            <ul>
+                {products.map((p) => (
+                    <li key={p.id}>
+                        {p.thumbnail_url && (
+                            <img src={p.thumbnail_url} alt="" />
+                        )}
+                        {p.name} — {p.price}円
+                        <button onClick={() => addToCart(p.id)}>
+                            カートに入れる
+                        </button>
+                    </li>
+                ))}
+            </ul>
+        </main>
+    );
 }
 ```
 
@@ -1576,11 +1587,11 @@ export default function App() {
 
 ### 5-2. 🔬 仕組み解剖
 
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `environment:` | 環境変数の指定 | `compose.yaml` に直接書いた `名前: 値` を、コンテナの環境変数にする。`-e` と同じ。P4-1 の宣言をここで回収する |
-| `env_file:` | 環境変数ファイルの指定 | **Compose が** `up` のときにファイルを読み、中身を環境変数にする。`--env-file` と同じ |
-| `docker compose config` | 設定の展開表示 | ファイルの読み込み・相対パスの解決・省略値の補完を全部済ませた、最終的な設定を出す。コンテナは作らない |
+| 部品                    | 正式名称               | 実行時に何が起きるか                                                                                          |
+| ----------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `environment:`          | 環境変数の指定         | `compose.yaml` に直接書いた `名前: 値` を、コンテナの環境変数にする。`-e` と同じ。P4-1 の宣言をここで回収する |
+| `env_file:`             | 環境変数ファイルの指定 | **Compose が** `up` のときにファイルを読み、中身を環境変数にする。`--env-file` と同じ                         |
+| `docker compose config` | 設定の展開表示         | ファイルの読み込み・相対パスの解決・省略値の補完を全部済ませた、最終的な設定を出す。コンテナは作らない        |
 
 設定がコンテナに届くまでの順番です。
 
@@ -1599,11 +1610,11 @@ compose.yaml ───┘                                      │
 
 **名前が似ているもの**を並べます。
 
-| | `env_file:` に書いた `apps/api/.env` | プロジェクト直下の `.env` |
-| --- | --- | --- |
-| 誰が読むか | Compose が、そのサービスのために読む | Compose が、`compose.yaml` を読む前に自動で読む |
-| 何に使うか | コンテナの環境変数になる | `compose.yaml` の中の `${名前}` を置き換える |
-| この教材で使うか | 使う | 使わない |
+|                  | `env_file:` に書いた `apps/api/.env` | プロジェクト直下の `.env`                       |
+| ---------------- | ------------------------------------ | ----------------------------------------------- |
+| 誰が読むか       | Compose が、そのサービスのために読む | Compose が、`compose.yaml` を読む前に自動で読む |
+| 何に使うか       | コンテナの環境変数になる             | `compose.yaml` の中の `${名前}` を置き換える    |
+| この教材で使うか | 使う                                 | 使わない                                        |
 
 根拠: https://docs.docker.com/compose/how-tos/environment-variables/variable-interpolation/
 
@@ -1618,13 +1629,13 @@ compose.yaml ───┘                                      │
                   → 出したファイルが本当に読まれたかは、compose.yaml を見ても分からないから
 ```
 
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | `dotenv` で `.env` を読む流れに近い。違うのは、読むのがアプリではなく Compose である点（P3-4 と同じ） |
-| **なぜこの設計か** | 同じ `compose.yaml` を、`.env` を差し替えるだけで別の環境に使える |
-| **ビルド時かランタイム時か** | ランタイム。`.env` を変えたら、イメージではなくコンテナを作り直す（`up -d` で入れ替わる） |
-| **ホストからの見え方** | `docker compose config` と、`docker compose exec api env` |
-| **失敗時の挙動** | `env_file:` のパスを間違えると、起動前に止まる。下の例 |
+| 確認すること                 | 内容                                                                                                  |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **既知スタックとの対応**     | `dotenv` で `.env` を読む流れに近い。違うのは、読むのがアプリではなく Compose である点（P3-4 と同じ） |
+| **なぜこの設計か**           | 同じ `compose.yaml` を、`.env` を差し替えるだけで別の環境に使える                                     |
+| **ビルド時かランタイム時か** | ランタイム。`.env` を変えたら、イメージではなくコンテナを作り直す（`up -d` で入れ替わる）             |
+| **ホストからの見え方**       | `docker compose config` と、`docker compose exec api env`                                             |
+| **失敗時の挙動**             | `env_file:` のパスを間違えると、起動前に止まる。下の例                                                |
 
 ```text
 env file /Users/you/.../roadmap-sh-docker/apps/api/.envv not found: stat ...: no such file or directory
@@ -1680,12 +1691,12 @@ curl -s localhost:5173/api/cart
 
 ### 5-8. 初出トークンの回収確認
 
-| トークン | 扱い |
-| --- | --- |
-| `environment:` | 5-2 で解剖。P4-1 の宣言を回収 |
-| `env_file:` | 5-1 で実践、5-2 で解剖 |
-| `docker compose config` | 5-1 で実践、5-2 で解剖 |
-| Redis、ハッシュ | 5-1 で解説 |
+| トークン                | 扱い                          |
+| ----------------------- | ----------------------------- |
+| `environment:`          | 5-2 で解剖。P4-1 の宣言を回収 |
+| `env_file:`             | 5-1 で実践、5-2 で解剖        |
+| `docker compose config` | 5-1 で実践、5-2 で解剖        |
+| Redis、ハッシュ         | 5-1 で解説                    |
 
 ### 📇 まとめカード
 
@@ -1694,95 +1705,284 @@ curl -s localhost:5173/api/cart
 **残った問い**: 画像を受け取ったら、縮めてサムネイルを作りたい。でも、重い処理で API の応答を待たせたくない。
 
 ---
+
 ▶ **次**: P4-6 ワーカーでサムネイルを作る
 
 ---
 
-## P4-6: ワーカーでサムネイルを作る
+## P4-6: ワーカーでサムネイルを作る（小さく分けた版）
 
-**❓ この回の問い**: 前回の答えは「サービスを足し、設定を外に出せる」だった。次は重い処理だ。
-→ **重い処理を、API とは別のコンテナに任せられるのか？ そのコンテナは、どのイメージから作るのか？**
+> 📝 **作り直しました（2026-11-14）**: 前の P4-6 は、1回で 7つのファイルを変える作りでした。量が多すぎてコピペ作業になりやすかったので、**小さなステップに分けました。** 1回に変えるファイルは1つ、自分で書くのは5行までです。
 
-**作るもの / 確かめること**: 同じイメージを別のコマンドで動かし、画像を volume で共有する
-**重要度**: 🔴 毎日使う — 「同じイメージで役割だけ変える」は、Compose でよく出る形だから
-**前ステップとの接続**: P4-5 の `compose.yaml` に `worker` を足す
-
-### 6-0. このステップの初出トークン
-
-**Docker**: `command:` `docker compose logs -f` `stop_grace_period`
-**Linux**: `/proc/1/cmdline`
-**その他**: ワーカー、タスクキュー、Celery
-
-### 6-1. 実践
-
-> 🧒 **かみくだくと**: ワーカー = 裏で仕事をこなす係。タスクキュー = 仕事の受付箱。API は「サムネイルを作って」というメモを受付箱（Redis）に入れて、すぐ返事をします。ワーカーが箱からメモを取り出して、仕事をします。Celery（セロリ）は、この仕組みを Python で作る部品です。
+**P4-6 ぜんたいの地図**（各ステップで、いまどこにいるかを示します）
 
 ```text
-curl（画像）
-   │
-   ▼
-api ──① 画像を media に保存
-   │──② 「サムネイルを作って」を Redis に入れる
-   │──③ すぐ {"status": "queued"} を返す
-   ▼
-redis（受付箱）
-   │
-   ▼
-worker ──④ メモを取り出す
-       ──⑤ media の画像を読み、縮めて media に書く
+① api が画像を受け取って保存する
+        │
+        ▼
+② api が「サムネイルを作って」というメモを、受付箱に入れる
+        │            （受付箱 ＝ Redis の 1番の部屋）
+        ▼
+③ worker が受付箱からメモを取り出す
+        │
+        ▼
+④ worker が画像を縮めて、サムネイルとして保存する
+        │
+        ▼
+⑤ 画面にサムネイルが出る
 ```
 
-**見てほしいところ**: `api` と `worker` は、同じ `media` を見ています。だから、`api` が置いた画像を `worker` が読めます。
+**見てほしいところ**: `api` と `worker` は別のコンテナです。**②と③のあいだに受付箱がある**ので、api は worker の仕事が終わるのを待たずに返事ができます。
 
-#### API に部品とコードを足す
+| ステップ  | やること                                      | 地図     |
+| --------- | --------------------------------------------- | -------- |
+| **P4-6a** | 受付箱の場所を Celery に教える                | ②③の準備 |
+| P4-6b     | worker コンテナを起動する                     | ③        |
+| P4-6c     | 画像を受け取って保存する                      | ①        |
+| P4-6d     | メモを受付箱に入れ、worker に届ける           | ②③       |
+| P4-6e     | サムネイルを作る                              | ④        |
+| P4-6f     | 画面にサムネイルを出す                        | ⑤        |
+| P4-6g     | worker を止めるとき、仕事が終わるまで待たせる | ③④       |
 
-**ファイル**: `apps/api/pyproject.toml`（差分）
+P4-6b 以降は、P4-6a が終わってから作ります。
 
-```diff
-     "mysqlclient>=2.3,<2.4",
-     "redis>=8.1,<8.2",
-+    "celery[redis]>=5.6,<5.7",
-+    "pillow>=13.0,<13.1",
- ]
+---
+
+## P4-6a: 受付箱の場所を Celery に教える
+
+**❓ この回の問い**: 前回（P4-5）の答えは「設定は `.env` に出し、`docker compose config` で確かめる」だった。
+→ **では、重い仕事を頼むための「受付箱」の場所も、同じやり方で渡せるのか？**
+
+**作ること / 確かめること**: Celery（セロリ）を入れ、受付箱の場所が `.env` → `settings.py` → Celery の順に届くことを確かめる
+**重要度**: 🔴 毎日使う — 「`.env` から設定を受け取る」形は、どのサービスでも同じだから
+**前ステップとの接続**: P4-5 で作った `REDIS_URL` の、すぐ隣に書く
+
+### 🔁 前回の思い出し
+
+**問い**: P4-5 で、カートの置き場所 `REDIS_URL=redis://redis:6379/0` を書いたのは、A と B のどちらでしたか？
+A. `compose.yaml`　B. `apps/api/.env`
+
+<details><summary>答え</summary>
+
+**B. `apps/api/.env`**。`compose.yaml` には `env_file: ./apps/api/.env` だけを書き、値はファイルの外に出しました。今日も同じ形を使います。
+
+</details>
+
+### 🗺️ 今日の地図
+
+```text
+apps/api/.env              … チャンク1
+  BROKER_URL=redis://redis:6379/1
+        │ コンテナの環境変数として渡る
+        ▼
+apps/api/src/config/settings.py   … チャンク2
+  CELERY_BROKER_URL = os.environ["BROKER_URL"]
+        │ Celery が settings を読む
+        ▼
+apps/api/src/config/celery.py     … チャンク3
+  app（Celery の本体）が受付箱の場所を知る
 ```
+
+**見てほしいところ**: 値（`redis://redis:6379/1`）を書くのは `.env` の1か所だけです。下の2つのファイルは、それを**受け取って渡すだけ**です。
+
+### 6a-0. このステップの初出
+
+**Docker**: なし（P4-5 までの道具だけで進む） / **Linux**: なし
+**その他**: Celery、ブローカー、`config_from_object`
+
+### 準備: Celery を入れる
+
+> 📇 **Celery（セロリ）** — かみくだくと: 「重い仕事を、あとで別の係にやらせる」ための Python の部品。
+> 似た言葉との違い: Redis = メモを置いておく**箱**。Celery = 箱にメモを入れたり、取り出して仕事をしたりする**しくみ**。
+> この教材では: api がメモを入れ、worker（P4-6b）が取り出す。
+
+ここはコードを書く所ではないので、コマンドをそのまま打ちます。
+
+**実行場所**: リポジトリのいちばん上（`roadmap-sh-docker/`）
 
 ```bash
-docker run --rm -i --entrypoint sh ec-api:step7 -c 'cat > pyproject.toml && uv lock -q && cat uv.lock' < apps/api/pyproject.toml > apps/api/uv.lock.new
-mv apps/api/uv.lock.new apps/api/uv.lock
-grep -A1 -E 'name = "(celery|pillow)"$' apps/api/uv.lock
+cd apps/api
+uv add --no-sync 'celery[redis]>=5.6,<5.7'
+cd ../..
+grep -A1 'name = "celery"$' apps/api/uv.lock
 ```
 
 ```text
 name = "celery"
 version = "5.6.3"
---
-name = "pillow"
-version = "13.0.0"
 ```
 
-✅ 検証済み: uv 0.13.6
+✅ 検証済み: uv 0.13.7（Mac）/ 2026-11-14
 
-Pillow は、画像を扱う Python の部品です。
+| 部品            | 意味                                                                                                                                              |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `uv add`        | `pyproject.toml` に部品を書き足し、`uv.lock`（使う版の一覧）も書き直す                                                                            |
+| `--no-sync`     | **Mac の `.venv` には入れない。** ファイル2つを書き直すだけ。部品を実際に入れるのは、コンテナのビルドのとき（`Dockerfile` の `uv sync --locked`） |
+| `celery[redis]` | Celery に「Redis を受付箱として使うための追加部品」も付けて入れる                                                                                 |
+| `>=5.6,<5.7`    | 5.6 系だけを使う。勝手に 5.7 に上がらないようにする                                                                                               |
 
-| ファイル | 役割 |
-| --- | --- |
-| `src/catalog/models.py` | 商品に、画像とサムネイルの列を足す |
-| `src/config/celery.py` | Celery の設定 |
-| `src/config/__init__.py` | Django の起動時に Celery を読み込む |
-| `src/catalog/tasks.py` | サムネイルを作る仕事 |
-| `src/config/settings.py` | 受付箱の場所と、画像の置き場所 |
-| `src/config/urls.py` | 開発中に、画像を配る |
-| `src/config/api.py` | 画像を受け取る API |
+続けて、新しい部品が入ったイメージを作ります。
 
-**ファイル**: `apps/api/src/catalog/models.py`（差分）
+```bash
+docker compose build api
+```
+
+<details><summary>💡 なぜ前の P4-6 と入れ方が違うの？</summary>
+
+前の P4-6 では、`docker run ... uv lock` という長いコマンドで、コンテナの中の uv に `uv.lock` を作らせていました。いまは Mac にも uv が入っているので、`uv add --no-sync` の1行で同じことができます。
+
+</details>
+
+---
+
+### チャンク1: 受付箱の場所を書く（`apps/api/.env`）— 地図のいちばん上
+
+> 📇 **ブローカー** — 正式名称: **message broker**（メッセージブローカー）。Celery の設定名は `broker_url`
+> かみくだくと: 仕事のメモを**預かる受付窓口**。
+> 似た言葉との違い: ワーカー（worker）= メモを取り出して、仕事を**やる係**。
+> この教材では: Redis の **1番の部屋**（`redis://redis:6379/1`）。カートは 0番の部屋なので、部屋を分ける。
+
+> 📇 **部屋** — 正式名称: **logical database**（論理データベース）。URL では **database number**（データベース番号）
+> かみくだくと: 1つの Redis の中を、番号で区切った部屋。最初から **0〜15番の16個**ある（Redis の設定 `databases 16` で決まっている）。
+> 似た言葉との違い: MySQL の「データベース」は名前を付けて作るもの。Redis の部屋は、**最初から番号で用意されている**。作る手順は要らない。
+> この教材では: 0番 = カート、1番 = 受付箱。`redis-cli -n 1` のように `-n` で部屋を選べる。
+> 根拠: https://redis.io/docs/latest/commands/select/
+
+**🤔 先に考える**: Redis にはカートがもう 0番の部屋に入っています。受付箱も**同じ 0番**に置くと、何か困ると思いますか？ 一言で（「分からない」でも大丈夫です）。
+
+<details><summary>答え</summary>
+
+困ることがあります。カートのデータと仕事のメモが同じ部屋に混ざるので、中を見たときに区別しにくくなります。片方だけ消したいときにも困ります。番号を変えるだけで部屋を分けられるので、分けておきます。
+
+</details>
+
+**🎯 書くもの**: `apps/api/.env` の**いちばん下**に、受付箱の場所を1行足す。名前は `BROKER_URL`、値は「Redis の 1番の部屋」。
+
+**✍️ 自分で書く**（2回目なので穴埋め）: P4-5 で書いた行を見ながら、`___` を埋めます。
+
+```text
+REDIS_URL=redis://redis:6379/0
+BROKER_URL=redis://___:6379/___
+```
+
+<details><summary>ヒント1</summary>
+
+1つ目の `___` は、Redis コンテナの**サービス名**です（P4-1：サービス名で呼び合える）。
+
+</details>
+
+<details><summary>答え合わせ</summary>
 
 ```diff
-     description = models.TextField(blank=True)
-+    image = models.ImageField(upload_to="products/", blank=True)
-+    thumbnail = models.ImageField(upload_to="thumbnails/", blank=True)
+ REDIS_URL=redis://redis:6379/0
++BROKER_URL=redis://redis:6379/1
 ```
 
-**ファイル**: `apps/api/src/config/celery.py`（新規・全文）
+</details>
+
+**▶️ 確かめる**: 書いた値が、コンテナに渡る形になっているかを見ます（P4-5 の道具）。
+
+```bash
+docker compose config api | grep BROKER
+```
+
+```text
+      BROKER_URL: redis://redis:6379/1
+```
+
+何も出なかったら、行の名前のつづりと、保存したかを見直します。
+
+**🔬 1行ずつ分解**:
+
+| 部品         | 読み方                                       | 意味                                                               | 無いと / 変えるとどうなる                                                                                                                                      |
+| ------------ | -------------------------------------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BROKER_URL` | ブローカー ユーアールエル                    | 環境変数の名前。チャンク2 でこの名前を探す                         | つづりを変えると、チャンク2 で `KeyError`（その名前が無い）になる                                                                                              |
+| `redis://`   | レディス                                     | 「Redis につなぐ」という印                                         | —                                                                                                                                                              |
+| `redis`      | レディス                                     | Redis コンテナの**サービス名**。ネットワークの中で住所として使える | `localhost` にすると、api コンテナ**自身**を探してしまい、つながらない                                                                                         |
+| `6379`       | —                                            | Redis が待っている番号（ポート）                                   | —                                                                                                                                                              |
+| `/1`         | スラッシュ いち（正式名称: database number） | Redis の中の部屋（論理データベース）の番号。0〜15 がある           | `/0` にすると、カートと同じ部屋に混ざる。`/16` にすると、部屋が無いのでエラー（`ERR DB index is out of range`）。✅ 検証済み: `redis-cli -n 16 PING` / redis 8 |
+
+---
+
+### チャンク2: settings.py で受け取る（`apps/api/src/config/settings.py`）— 地図のまん中
+
+**🤔 先に考える**: このチャンクで書く1行は、P4-5 で書いたどの行と**ほぼ同じ形**になると思いますか？ ファイルを開く前に、行を1つ思い出してみてください。
+
+<details><summary>答え</summary>
+
+`REDIS_URL = os.environ["REDIS_URL"]` です。形は同じです。ただし今回は、**左の名前と右の名前が違います**（下の 🎯 を見てください）。
+
+</details>
+
+**🎯 書くもの**: `settings.py` の**いちばん下**（`REDIS_URL = ...` の下）に、環境変数 `BROKER_URL` を読んで、`CELERY_BROKER_URL` という名前の設定にする1行を書く。
+
+**✍️ 自分で書く**（3回目なので、日本語だけで書きます）
+
+<details><summary>ヒント1: 使う部品</summary>
+
+`os.environ` と `[ ]`。
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+```diff
+ REDIS_URL = os.environ["REDIS_URL"]
++
++CELERY_BROKER_URL = os.environ["BROKER_URL"]
+```
+
+</details>
+
+**▶️ 確かめる**: Django が設定を読めているかを、コンテナの中で聞きます。
+
+```bash
+docker compose run --rm api .venv/bin/python src/manage.py shell -c "from django.conf import settings; print(settings.CELERY_BROKER_URL)"
+```
+
+```text
+API を起動します
+1 object imported automatically (use -v 2 for details).
+
+redis://redis:6379/1
+```
+
+✅ 検証済み: Django 5.2 / Docker 29 系（2026-11-14）。同じイメージを `docker run --env-file` で動かして確認した
+
+最後の行が出れば OK です。上の2行は気にしなくて大丈夫です（1行目は `entrypoint.sh` の `echo`。2行目は Django の `shell` がいつも出すお知らせ）。
+
+**🔬 1行ずつ分解**:
+
+| 部品                      | 読み方                | 意味                                                                          | 無いと / 変えるとどうなる                                                                                           |
+| ------------------------- | --------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `CELERY_BROKER_URL`（左） | —                     | Django の設定の名前。**`CELERY_` で始まる**のが大事（チャンク3 で使う）       | 頭の `CELERY_` を外すと、チャンク3 で Celery がこの設定を見つけられない                                             |
+| `os.environ`              | オーエス エンバイロン | コンテナに渡された環境変数の一覧                                              | —                                                                                                                   |
+| `["BROKER_URL"]`          | 角かっこ              | 一覧から、この名前の値を1つ取り出す。**無ければその場でエラー**（`KeyError`） | `.get("...")` にすると、無くてもエラーにならず `None` になる。設定漏れに気づきにくくなるので、ここでは `[ ]` を使う |
+
+<details><summary>💡 なぜ、左と右で名前を変えたの？</summary>
+
+Celery には「`CELERY_BROKER_URL` という名前の**環境変数**があれば、`settings.py` を通さずに直接読む」という機能があります。`.env` も同じ名前にすると、値が `settings.py` を通らずに Celery へ届いてしまいます。すると、チャンク2 の行を消しても動いてしまい、地図の道が見えなくなります。
+
+この教材では、道を1本にするために `.env` 側を `BROKER_URL` にしました。
+
+</details>
+
+---
+
+### チャンク3: Celery の本体を作る（`apps/api/src/config/celery.py`・新しいファイル）— 地図のいちばん下
+
+**🤔 先に考える**: Celery は、チャンク2 で書いた `CELERY_BROKER_URL` を自分で見つけられると思いますか？
+A. 見つけられる（名前で勝手に探す）　B. 「settings.py を読んで」と教える行が要る
+
+<details><summary>答え</summary>
+
+**B** です。Celery は Django とは別の部品なので、どの設定を読めばよいかを1行で教えます。それが下のコードの最後の行です。
+
+</details>
+
+**🎯 書くもの**: `apps/api/src/config/` に `celery.py` を新しく作り、Celery の本体（`app`）を作る。そして「`settings.py` の `CELERY_` で始まる設定を読んで」と教える。
+
+**✍️ 自分で書く**（初めて出る形なので、**先に下の分解表を読んでから、手で打ちます。コピペはしません**）
 
 ```python
 import os
@@ -1792,493 +1992,550 @@ from celery import Celery
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
 
 app = Celery("config")
-# settings.py の CELERY_ で始まる設定を読む
 app.config_from_object("django.conf:settings", namespace="CELERY")
-# INSTALLED_APPS の各アプリから tasks.py を探す
-app.autodiscover_tasks()
 ```
 
-**ファイル**: `apps/api/src/config/__init__.py`（空のファイルを置き換え・全文）
+**🔬 1行ずつ分解**（打つ前に読む）:
 
-```python
-from .celery import app as celery_app
+| 部品                         | 読み方                             | 意味                                                                                                                                | 無いと / 変えるとどうなる                                                                                  |
+| ---------------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `import os`                  | インポート オーエス                | 環境変数を扱う部品を使えるようにする                                                                                                | 次の `os.environ` で `NameError`                                                                           |
+| `from celery import Celery`  | —                                  | 準備で入れた Celery から、本体を作る型 `Celery` を取り出す                                                                          | `docker compose build api` をしていないと `ModuleNotFoundError: No module named 'celery'`                  |
+| `os.environ.setdefault(...)` | セット デフォルト                  | 「どの設定ファイルを使うか」が**まだ決まっていなければ**、`config.settings`（= `settings.py`）にする                                | `manage.py` を通さずに Celery だけ起動したとき（P4-6b の worker）に、Django が設定ファイルを見つけられない |
+| `"DJANGO_SETTINGS_MODULE"`   | ジャンゴ セッティングス モジュール | Django が「設定ファイルの場所」を探す環境変数の名前                                                                                 | —                                                                                                          |
+| `app = Celery("config")`     | —                                  | Celery の本体を1つ作り、`app` という名前を付ける。`"config"` はこの本体の名前                                                       | —                                                                                                          |
+| `config_from_object(...)`    | コンフィグ フロム オブジェクト     | 「この場所から設定を読んで」と Celery に教える                                                                                      | 消すと、Celery は受付箱の場所を知らないままになる                                                          |
+| `"django.conf:settings"`     | —                                  | 読む場所 ＝ Django の設定（`settings.py` の中身）                                                                                   | —                                                                                                          |
+| `namespace="CELERY"`         | ネームスペース                     | 「`CELERY_` で始まる名前だけ読む。頭の `CELERY_` は外して読む」。だから `CELERY_BROKER_URL` は、Celery の中では `broker_url` になる | —                                                                                                          |
 
-__all__ = ["celery_app"]
-```
+<details><summary>答え合わせ（新しいファイルの全文）</summary>
 
-**ファイル**: `apps/api/src/catalog/tasks.py`（新規・全文）
+上のコードと同じです。1文字ずつ見比べて、違う所があれば直します。
 
-```python
-import os
-import time
-from io import BytesIO
+</details>
 
-from celery import shared_task
-from django.core.files.base import ContentFile
-from PIL import Image
-
-from catalog.models import Product
-
-
-@shared_task
-def make_thumbnail(product_id):
-    # 重い処理の代わりに待つ。秒数は環境変数で変えられる
-    time.sleep(int(os.environ.get("THUMBNAIL_DELAY", "0")))
-    product = Product.objects.get(id=product_id)
-    with Image.open(product.image.path) as img:
-        img.thumbnail((200, 200))
-        buffer = BytesIO()
-        img.convert("RGB").save(buffer, "JPEG")
-    product.thumbnail.save(f"{product_id}.jpg", ContentFile(buffer.getvalue()))
-```
-
-`THUMBNAIL_DELAY` は、6-6 で「時間のかかる仕事」を再現するためのものです。ふだんは 0 秒です。
-
-**ファイル**: `apps/api/src/config/settings.py`（末尾に追記）
-
-```python
-CELERY_BROKER_URL = os.environ["CELERY_BROKER_URL"]
-
-MEDIA_ROOT = "/app/media"
-MEDIA_URL = "/media/"
-```
-
-> 🧒 **かみくだくと**: ブローカー = 受付箱の係。Celery では Redis がこの役をします。
-
-**ファイル**: `apps/api/src/config/urls.py`（全文を置き換え）
-
-```python
-from django.conf import settings
-from django.conf.urls.static import static
-from django.urls import path
-
-from config.api import api
-
-urlpatterns = [
-    path("api/", api.urls),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-```
-
-**ファイル**: `apps/api/src/config/api.py`（差分）
-
-```diff
--from ninja import Header, ModelSchema, NinjaAPI, Schema
-+from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
-
- from catalog.models import Product
-+from catalog.tasks import make_thumbnail
-```
-
-```diff
- class ProductOut(ModelSchema):
-     class Meta:
-         model = Product
-         fields = ["id", "name", "price", "description"]
-+
-+    thumbnail_url: str | None
-+
-+    @staticmethod
-+    def resolve_thumbnail_url(obj):
-+        return obj.thumbnail.url if obj.thumbnail else None
-```
-
-`@api.get("/cart")` の**前**に、次の関数を足します。
-
-```python
-@api.post("/products/{product_id}/image")
-def upload_image(request, product_id: int, image: File[UploadedFile]):
-    product = get_object_or_404(Product, id=product_id)
-    product.image.save(image.name, image)
-    # 重い処理は worker に任せ、すぐに返す
-    make_thumbnail.delay(product.id)
-    return {"status": "queued"}
-```
-
-`make_thumbnail.delay(...)` が、受付箱にメモを入れる1行です。その場でサムネイルは作りません。
-
-**ファイル**: `apps/api/.env`（末尾に追記）
-
-```text
-CELERY_BROKER_URL=redis://redis:6379/1
-```
-
-カートは Redis の 0 番、受付箱は 1 番を使います。番号で置き場を分けています。
-
-**ファイル**: `apps/web/vite.config.js`（差分）
-
-```diff
-       "/api": "http://api:8000",
-+      "/media": "http://api:8000",
-```
-
-#### compose.yaml に worker を足す
-
-**ファイル**: `compose.yaml`（全文を置き換え）
-
-```yaml
-services:
-  db:
-    image: mysql:8.4
-    environment:
-      MYSQL_ROOT_PASSWORD: root-pass
-      MYSQL_DATABASE: ec
-      MYSQL_USER: ec
-      MYSQL_PASSWORD: ec-pass
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
-      interval: 2s
-      timeout: 5s
-      retries: 30
-    volumes:
-      - db-data:/var/lib/mysql
-    networks:
-      - back
-
-  api:
-    build: ./apps/api
-    image: ec-api:dev
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    ports:
-      - "8000:8000"
-    env_file:
-      - ./apps/api/.env
-    volumes:
-      - ./apps/api/src:/app/src
-      - media:/app/media
-    networks:
-      - front
-      - back
-
-  worker:
-    build: ./apps/api
-    image: ec-api:dev
-    command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
-    depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_started
-    env_file:
-      - ./apps/api/.env
-    volumes:
-      - ./apps/api/src:/app/src
-      - media:/app/media
-    networks:
-      - back
-
-  redis:
-    image: redis:8-alpine
-    networks:
-      - back
-
-  web:
-    build: ./apps/web
-    ports:
-      - "5173:5173"
-    depends_on:
-      - api
-    networks:
-      - front
-    develop:
-      watch:
-        - action: sync
-          path: ./apps/web/src
-          target: /app/src
-        - action: rebuild
-          path: ./apps/web/package.json
-
-volumes:
-  db-data:
-  media:
-
-networks:
-  front:
-  back:
-```
-
-変えたところは4つです。
-
-- `api` と `worker` の両方に `image: ec-api:dev` を書いた。同じ名前のイメージを使う
-- `worker` に `command:` を書いた。イメージの `CMD`（`runserver`）の代わりに、Celery を起動する
-- `api` と `worker` の両方に `media:/app/media` をつないだ
-- いちばん外の `volumes:` に `media` を足した
+**▶️ 確かめる**: Celery の本体が、受付箱の場所を知っているかを聞きます。
 
 ```bash
-docker compose up -d --build
-sleep 5
-docker compose exec api .venv/bin/python src/manage.py makemigrations catalog
-docker compose exec api .venv/bin/python src/manage.py migrate
-docker compose ps --format '{{.Service}} {{.Image}} {{.Status}}'
+docker compose run --rm api .venv/bin/python src/manage.py shell -c "from config.celery import app; print(app.conf.broker_url)"
 ```
 
 ```text
-Migrations for 'catalog':
-  src/catalog/migrations/0002_product_image_product_thumbnail.py
-    + Add field image to product
-    + Add field thumbnail to product
-（省略）
-  Applying catalog.0002_product_image_product_thumbnail... OK
-api ec-api:dev Up 6 seconds
-db mysql:8.4 Up 3 minutes (healthy)
-redis redis:8-alpine Up About a minute
-web roadmap-sh-docker-web Up 5 seconds
-worker ec-api:dev Up 6 seconds
+API を起動します
+1 object imported automatically (use -v 2 for details).
+
+redis://redis:6379/1
 ```
 
-✅ 検証済み: Docker Compose v5.5.1 / Celery 5.6.3
+✅ 検証済み: Celery 5.6.3 / Django 5.2（2026-11-14）。同じイメージを `docker run --env-file` で動かして確認した
 
-**`api` と `worker` の IMAGE 列が、どちらも `ec-api:dev` です。**
+**`broker_url` と聞いたのに、`.env` に書いた値が返ってきました。** 地図の上から下まで、値が届いています。
 
-#### ログを追いかける: `docker compose logs -f`
+**🧪 壊してみる**
 
-別のターミナルで、`worker` のログを流し続けます。
+1. **予想**: `celery.py` の最後の行（`app.config_from_object(...)`）を消して、上の「確かめる」をもう一度打つと、何が出ると思いますか？
+   A. 同じ `redis://redis:6379/1`　B. 何か別のもの
+2. **実行**: 行を消して保存し、同じコマンドを打ちます
+3. **見る**: 最後の行が `None`（何も無い）になります。**Celery は `settings.py` を読みに行かなくなり、受付箱の場所を知らないままになりました。** 分解表の `config_from_object` の行の「無いとどうなる」と同じです
+4. **元に戻す**: 消した行を戻し、もう一度打って `redis://redis:6379/1` に戻ることを確かめます
+
+✅ 検証済み: Celery 5.6.3（2026-11-14）
+
+<details><summary>もう1つ試したい人へ</summary>
+
+`settings.py` の左の名前から `CELERY_` を外して `BROKER_URL = os.environ["BROKER_URL"]` にすると、どうなるでしょう。これも `None` になります。`namespace="CELERY"` は「`CELERY_` で始まる名前だけ読む」からです。試したら元に戻します。
+
+</details>
+
+<details><summary>⚠️ Zed で `celery` に赤線が出たら</summary>
+
+`--no-sync` で Mac の `.venv` には Celery を入れていないので、Zed（の型チェック）が Celery を見つけられません。コンテナの中では動くので、教材を進めるのには困りません。気になる場合は、Mac の `.venv` にも入れます（`mysqlclient` のビルドに必要な場所の指定が要ります）。
+
+```bash
+cd apps/api
+PKG_CONFIG_PATH=/opt/homebrew/opt/mysql-client/lib/pkgconfig uv sync
+cd ../..
+```
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「Celery は設定を勝手に見つけると思っていたけど、実は `config_from_object` で読む場所を教えていた」
+
+### ✅ できるようになったこと
+
+- [x] 受付箱の場所が、`.env` → `settings.py` → `celery.py` の順に届くことを、地図を見ながら説明できる
+- [x] `namespace="CELERY"` があるので、`CELERY_BROKER_URL` が `broker_url` として読まれることを説明できる
+- [x] `config_from_object` の行を消すと `None` になる理由を、分解表を見ずに言える
+
+**残った問い**: 受付箱の場所は分かった。でも、箱からメモを取り出す係（worker）は、まだどこにもいない。**worker は、どのイメージから作ればいいのか？**
+
+---
+▶ **次**: P4-6b worker コンテナを起動する
+
+---
+
+## P4-6b: worker コンテナを起動する
+
+**❓ この回の問い**: 前回（P4-6a）の答えは「受付箱の場所は `.env` → `settings.py` → `celery.py` の順に届く」だった。でも、箱からメモを取り出す係（worker）は、まだどこにもいない。
+→ **worker は、どのイメージから作ればいいのか？ api と同じイメージで、別の仕事をさせられるのか？**
+
+**作ること / 確かめること**: api と**同じイメージ**から worker コンテナを作り、受付箱（Redis の 1番の部屋）につながったことをログで確かめる
+**重要度**: 🔴 毎日使う — 「同じイメージで、役割だけ変える」は Compose でよく出る形だから
+**前ステップとの接続**: P4-6a で作った `celery.py` を、worker が起動のときに読む
+
+**P4-6 ぜんたいの地図での位置**: ③（worker が受付箱からメモを取り出す）の**係を用意する**ところ。
+
+### 🔁 前回の思い出し
+
+**問い**: P4-6a の 🧪 で、`celery.py` の `app.config_from_object(...)` を消したら、受付箱の場所は何と出ましたか？ そして、なぜでしたか？
+
+<details><summary>答え</summary>
+
+`None` と出ました。`config_from_object` は「`settings.py` を読みに行って」と Celery に教える行です。その行が無いと、Celery は `settings.py` を読みに行かなくなります。だから、受付箱の場所を知らないままでした。
+
+</details>
+
+### 🗺️ 今日の地図
+
+```text
+イメージ ec-api:dev          … チャンク1 で名前を付ける
+（中身: アプリのコード + Celery）
+        │
+        ├──▶ api コンテナ
+        │      イメージの CMD のまま動く
+        │      → runserver（Web の窓口）
+        │
+        └──▶ worker コンテナ      … チャンク2・3 で作る
+               command: で CMD を置き換える
+               → celery worker（受付箱を見張る係）
+                       │
+                       ▼
+               Redis の 1番の部屋（受付箱）につながる
+```
+
+**見てほしいところ**: 中身（イメージ）は**1つ**です。そこから、**起動するときの命令**だけを変えて、2つの係を作ります。
+
+### 6b-0. このステップの初出
+
+**Docker**: `image:`（`build:` と一緒に書く）、`command:`、`docker compose logs -f`
+**Linux**: なし（`/proc/1/cmdline` は P4-6 の前の版で一度出ています。今回は 🧪 で使うだけです）
+**その他**: なし
+
+---
+
+### チャンク1: api のイメージに名前を付ける（`compose.yaml` の `api`）— 地図のいちばん上
+
+> 📇 **イメージ名** — 正式名称: **image name**（イメージ名）。`:` の後ろは **tag**（タグ）。2つ合わせて **image reference**（イメージの参照名）と呼ぶ
+> かみくだくと: 段ボール（イメージ）に貼る**名札**。`ec-api` が品名、`dev` が「開発用」というラベル。
+> 似た言葉との違い: コンテナ名（`roadmap-sh-docker-api-1`）= 箱を開けて動かしている**部屋**の名前。イメージ名 = 封をした**段ボール**の名前。
+> この教材では: `ec-api:dev`。P2 で付けた `ec-api:step5` などと同じ形。
+
+**🤔 先に考える**: いまの `compose.yaml` の `api` には `image:` が書いてありません。それでも `build:` でイメージは作られています。**そのイメージには、どんな名前が付いていると思いますか？** 一言で（「分からない」でも大丈夫です）。
+
+<details><summary>答え</summary>
+
+`roadmap-sh-docker-api` です。名前を書かないと、Compose が「**プロジェクト名-サービス名**」で自動で付けます。プロジェクト名は、ふつうはフォルダ名（`roadmap-sh-docker`）です。
+
+```bash
+docker image ls roadmap-sh-docker-api
+```
+
+```text
+IMAGE                          ID             DISK USAGE   CONTENT SIZE   EXTRA
+roadmap-sh-docker-api:latest   156b14421db3        727MB          174MB
+```
+
+✅ 検証済み: 2026-11-14（ID は環境ごとに違います）
+
+</details>
+
+**🎯 書くもの**: `api` の `build: ./apps/api` の**すぐ下**に、作ったイメージへ `ec-api:dev` という名前を付ける1行を足す。
+
+**✍️ 自分で書く**（`image:` は P4-1 で `db` や `redis` に書いたので、穴埋めです）
+
+```yaml
+    api:
+        build: ./apps/api
+        ___: ec-api:dev
+        depends_on:
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+     api:
+         build: ./apps/api
++        image: ec-api:dev
+         depends_on:
+             db:
+```
+
+</details>
+
+**▶️ 確かめる**: イメージを作り直し、名札が付いたかを見ます。
+
+```bash
+docker compose build api
+docker image ls ec-api
+```
+
+```text
+IMAGE          ID             DISK USAGE   CONTENT SIZE   EXTRA
+ec-api:dev     22b673f15123        727MB          174MB
+ec-api:step5   fc84a4e1173c        380MB         91.4MB
+ec-api:step6   c5f10c5cf81f        672MB          166MB
+ec-api:step7   9a330e022bdb        672MB          166MB
+```
+
+✅ 検証済み: Docker Compose v5.5.1（2026-11-14）。手元と同じファイルを別の場所に写し、名前だけ `ec-api:p46b` にして確認した。ID は環境ごとに違います
+
+`ec-api:dev` の行が増えていれば OK です。下の3行は、P2 で自分で作ったイメージです。
+
+**🔬 1行ずつ分解**:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `image:` | イメージ（image） | `build:` と**一緒に書くと**、「作ったイメージに付ける名前」になる | 消すと、名前は自動の `roadmap-sh-docker-api` に戻る |
+| `ec-api` | イーシー エーピーアイ（image name / repository） | 品名。何のイメージかを表す | — |
+| `:dev` | コロン デブ（tag） | ラベル。同じ品名の中の、どの版かを表す | 書かないと `:latest` が付く |
+
+**📖 しくみ**
+
+- **何をしているか**: `build:` で作ったイメージに、`ec-api:dev` という**名札**（イメージ名とタグ）を貼っています。
+- **なぜ必要か**: このあと作る worker も、**同じイメージ**を使いたいからです。名前が決まっていれば、2つのサービスが「`ec-api:dev` を使う」と同じ名前で指せます。
+- **どういう原理で動くか**: `image:` の意味は、`build:` があるかどうかで変わります。
+  1. `build:` が**無い**とき（`db` の `image: mysql:8.4`）: Compose は、その名前のイメージを**取ってくる**（pull）。
+  2. `build:` が**ある**とき（今回）: Compose は、まず `Dockerfile` からイメージを**作る**（build）。そして、できたイメージに `image:` の名前を**付ける**。
+  
+  どちらでも `image:` は「イメージの名前」です。違うのは、**取ってくるのか、作って名付けるのか**だけです。
+  根拠: https://docs.docker.com/reference/compose-file/build/#using-build-and-image
+
+---
+
+### チャンク2: worker を足し、起動する命令を決める（`compose.yaml` の新しい `worker`）— 地図の右下
+
+> 📇 **command:** — 正式名称: **command**（Compose ファイルの `command` 属性）。Dockerfile の **CMD** を**上書きする**もの
+> かみくだくと: 段ボールに書いてある「開けたらまずこれをする」（CMD）を、**このコンテナだけ別の指示に貼り替える**付箋。
+> 似た言葉との違い: `ENTRYPOINT` = 毎回かならず最初に通る**玄関**（ここでは `./entrypoint.sh`）。`command:` は、玄関を通ったあとに**何をするか**だけを変える。玄関は変わらない。
+> この教材では: worker だけ、`runserver` の代わりに `celery worker` を起動する。
+
+**🤔 先に考える**: worker も api と同じイメージ `ec-api:dev` を使います。**何も変えずに起動すると、worker の中では何が動くと思いますか？**
+A. Celery のワーカー　B. api と同じ `runserver`
+
+<details><summary>答え</summary>
+
+**B** です。イメージには `CMD [".venv/bin/python", "src/manage.py", "runserver", ...]` が書いてあります（`apps/api/Dockerfile` の最後の行）。何も変えなければ、同じ `runserver` が動きます。だから `command:` で付箋を貼り替えます。（このチャンクの 🧪 で、実際に確かめます）
+
+</details>
+
+**🎯 書くもの**: `api` のブロックの**後ろ**（`redis:` の前）に、新しいサービス `worker` を足す。`api` と同じ場所からビルドし、同じ名前 `ec-api:dev` を付ける。そして、起動する命令を Celery のワーカーに置き換える。
+
+**✍️ 自分で書く**: `build:` と `image:` は、チャンク1 の `api` と同じ2行です。`command:` は**初めて出る形**なので、**先に下の分解表を読んでから、手で打ちます。コピペはしません。**
+
+```yaml
+    worker:
+        build: ./apps/api
+        image: ec-api:dev
+        command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
+```
+
+**🔬 1行ずつ分解**（打つ前に読む）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `worker:` | ワーカー（service name） | サービスの名前。`docker compose logs worker` のように、コマンドでこの名前を使う | — |
+| `build: ./apps/api` | ビルド | api と**同じ場所**から作る | — |
+| `image: ec-api:dev` | イメージ | api と**同じ名前**を付ける。だから中身も同じ | — |
+| `command:` | コマンド（command） | イメージの `CMD` を、このサービスだけ置き換える | 消すと `CMD` のまま。worker の中で `runserver` が動く（🧪 で試す） |
+| `[ ... ]` | 角かっこ（exec form / JSON 配列の形） | 命令を**1語ずつ区切って**渡す書き方。Dockerfile の `CMD [...]` と同じ形 | 区切りを間違えると、1語のつもりの文字が2語に分かれたりする |
+| `".venv/bin/celery"` | セロリ（Celery の command line program） | 準備で入れた Celery の**起動プログラム**。`.venv/bin/` の中にある | — |
+| `"--workdir", "src"` | ワークディレクトリ | 「`src` に移動してから始めて」。`config/` は `src/` の中にあるので、そこから探せるようにする | 消すと、`/app` から探すので見つからない。`Unable to load celery application. The module config was not found.` で止まる（✅ 検証済み） |
+| `"-A", "config"` | エー（app の略） | 「Celery の本体（app）は `config` にある」。Celery は `config` の中の `celery.py` から `app` を探す | `confg` と打ち間違えると `The module confg was not found.` で止まる（✅ 検証済み） |
+| `"worker"` | ワーカー | 「**ワーカーとして**動いて」。受付箱を見張り、メモが来たら仕事をする係 | — |
+| `"--loglevel", "info"` | ログレベル（log level） | どこまで細かくログを出すか。`info` = ふつうの知らせまで出す | `warning` にすると、`info` の知らせ（`Connected to ...` など）は出なくなる |
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+             - front
+             - back
+ 
++    worker:
++        build: ./apps/api
++        image: ec-api:dev
++        command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
++
+     redis:
+         image: redis:8-alpine
+```
+
+</details>
+
+**▶️ 確かめる**: まだ起動はしません。Compose が `command:` を**どう区切って受け取ったか**を見ます（P4-5 の `docker compose config`）。
+
+```bash
+docker compose config worker | grep -A9 'command:'
+```
+
+```text
+    command:
+      - .venv/bin/celery
+      - --workdir
+      - src
+      - -A
+      - config
+      - worker
+      - --loglevel
+      - info
+    image: ec-api:dev
+```
+
+✅ 検証済み: Docker Compose v5.5.1（2026-11-14）
+
+**1語ずつ、8つに分かれていれば OK です。** 分解表の行と見比べてみてください。
+
+**📖 しくみ**
+
+- **何をしているか**: api と同じイメージから、もう1つのサービス `worker` を作っています。そして、起動するときの命令（**CMD**、つまり段ボールに書いてある「開けたらまずこれ」）を、`command:` で Celery のワーカーに貼り替えています。
+- **なぜ必要か**: worker が使うコード（このあと書く `tasks.py`）も、DB の設定も、api と同じだからです。イメージを1つにすると、**api と worker でコードの版がずれません**。違うのは「何を起動するか」だけなので、そこだけを `command:` で変えます。
+- **どういう原理で動くか**: コンテナが起動するとき、Docker は **ENTRYPOINT**（玄関）と **CMD**（その後の命令）をつなげて、1本の命令にします。
+
+  ```text
+  api:    ./entrypoint.sh  .venv/bin/python src/manage.py runserver 0.0.0.0:8000
+          └─ ENTRYPOINT ─┘ └──────────── CMD（イメージのまま）───────────┘
+
+  worker: ./entrypoint.sh  .venv/bin/celery --workdir src -A config worker ...
+          └─ ENTRYPOINT ─┘ └──────────── command:（貼り替えた）──────────┘
+  ```
+
+  `entrypoint.sh` の最後は `exec "$@"` です（P2-5）。`"$@"` には、後ろの命令がそのまま入ります。そして `exec` で、`entrypoint.sh` 自身がその命令に**入れ替わります**。だから、worker のコンテナでいちばん最初に動くプロセス（**PID 1**）は、`celery` になります。
+
+---
+
+### チャンク3: worker に要るものだけを渡す（`compose.yaml` の `worker` の続き）— 地図のいちばん下
+
+**🤔 先に考える**: `api` には、下の6つの設定があります。**worker にも要るのはどれでしょう？** 1つずつ「要る / 要らない」と、理由を一言で考えてみてください。
+
+| api の設定 | 要る？ |
+| --- | --- |
+| ① `ports:`（8000 と 5678 を Mac に公開） | ？ |
+| ② `env_file: ./apps/api/.env` | ？ |
+| ③ `volumes: ./apps/api/src:/app/src` | ？ |
+| ④ `networks:` の `front` | ？ |
+| ⑤ `networks:` の `back` | ？ |
+| ⑥ `depends_on:`（db が healthy、redis が started） | ？ |
+
+<details><summary>ヒント</summary>
+
+worker に話しかけるのは誰でしょう？ Mac のブラウザ？ web コンテナ？ それとも、誰も話しかけない？ そして、worker が話しかける相手は誰でしょう？
+
+</details>
+
+<details><summary>答え</summary>
+
+| api の設定 | 要る？ | 理由 |
+| --- | --- | --- |
+| ① `ports:` | **要らない** | worker に話しかける人はいない。worker は自分から受付箱を見に行く |
+| ② `env_file:` | **要る** | 受付箱の場所 `BROKER_URL`（P4-6a）と、DB の接続先が入っている |
+| ③ `volumes:`（src） | **要る** | Mac で書いたコードを、コンテナの中にすぐ写すため。`tasks.py` を書いたとき、作り直さずに使える |
+| ④ `front` | **要らない** | `front` は web と api が話す道。worker は画面とは話さない |
+| ⑤ `back` | **要る** | Redis と DB がいる道。受付箱（Redis）に行くのに要る |
+| ⑥ `depends_on:` | **要る** | 受付箱（Redis）が無いと、つなぐ相手がいない。DB は P4-6e で商品を読むときに使う |
+
+</details>
+
+**🎯 書くもの**: `worker` の `command:` の**下**に、上で「要る」とした ②③⑤⑥ を書く。書き方は `api` と同じ。
+
+**✍️ 自分で書く**（`depends_on:` `env_file:` `volumes:` `networks:` はどれも P4-1〜P4-5 で書いたので、日本語だけで書きます。`api` のブロックを**見ながら**書いてかまいません。ただし、**要らない ①④ は写さない**）
+
+<details><summary>ヒント1: 書く順番</summary>
+
+`depends_on:` → `env_file:` → `volumes:` → `networks:` の順。`api` と同じ順にすると見比べやすい。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+         image: ec-api:dev
+         command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
++        depends_on:
++            db:
++                condition: service_healthy
++            redis:
++                condition: service_started
++        env_file:
++            - ./apps/api/.env
++        volumes:
++            - ./apps/api/src:/app/src
++        networks:
++            - back
+ 
+     redis:
+```
+
+</details>
+
+**▶️ 確かめる**: worker を起動して、ログ（記録）を見ます。
+
+```bash
+docker compose up -d worker
+docker compose logs worker
+```
+
+出力は長いです。**下の2行が出ていれば OK** です（時刻と `celery@` の後ろの英数字は、毎回違います）。
+
+```text
+worker-1  | [... INFO/MainProcess] Connected to redis://:**@redis:6379/1
+worker-1  | [... INFO/MainProcess] celery@0d42f40193ee ready.
+```
+
+✅ 検証済み: Docker Compose v5.5.1 / Celery 5.6.3（2026-11-14）。手元と同じファイルを別の場所に写し、ポートを公開しない設定で起動して確認した
+
+- `Connected to redis://...redis:6379/1` = 受付箱（Redis の 1番の部屋）に**つながった**。`:**@` は、Celery がパスワードの場所を伏せて表示したもの（今回はパスワードを付けていない）
+- `ready.` = 準備ができた。メモが来るのを**待っている**
+
+ほかにも、途中に次のような行が出ます。
+
+| 出てくる行 | 意味 |
+| --- | --- |
+| `SecurityWarning: You're running the worker with superuser privileges` | 「管理者（root）で動いているよ。おすすめしない」という**注意**。止まるわけではない（下の 🔓） |
+| `celery@... v5.6.3 (recovery)` | Celery の版。`recovery` は 5.6 系に付いた**愛称**（コードネーム）で、「復旧中」という意味ではない |
+| `.> transport: redis://:**@redis:6379/1` | 受付箱の場所。P4-6a で `.env` に書いた値 |
+| `.> concurrency: 12 (prefork)` | 同時にこなせる仕事の数。CPU の数で決まる（環境ごとに違う） |
+| `[tasks]` の下が空 | **まだ仕事の種類が1つも無い**。P4-6d で作る |
+
+**`docker compose logs -f`**: ログを**流し続けて**見たいときは、`-f` を付けます。
 
 ```bash
 docker compose logs -f worker
 ```
 
-```text
-worker-1  | [... INFO/MainProcess] Connected to redis://:**@redis:6379/1
-worker-1  | [... INFO/MainProcess] celery@5b314328ce28 ready.
-```
+> 📇 **logs -f** — 正式名称: `docker compose logs` の **--follow**（追いかける）オプション
+> かみくだくと: ログを「いままでの分を見せて終わり」ではなく、**新しい行が出るたびに画面に足し続ける**。
+> この教材では: 別のターミナルで開いておき、P4-6d でメモが届く瞬間を見る。止めるときは Ctrl+C。止めても worker は止まらない。
 
-✅ 検証済み: Docker Compose v5.5.1。時刻は省略した。`:**@` は、Celery がパスワードの場所を伏せて表示したもの。今回はパスワードを付けていない。
+**📖 しくみ**
 
-`-f` は、新しい行が出るたびに表示し続ける指定です。Ctrl+C で止めます。ログの頭の `worker-1  |` は、どのコンテナの行かを示します。サービス名を書かなければ、全サービスのログが混ざって流れます。
+- **何をしているか**: worker に、仕事に要る3つ（設定 `env_file`、コード `volumes`、道 `networks`）だけを渡しています。要らないもの（公開ポート、`front` の道）は渡していません。
+- **なぜ必要か**: コンテナは、渡されたものしか持っていません。`env_file:` が無ければ `BROKER_URL` を知りません。`networks: back` が無ければ、Redis までの道がありません。逆に、要らないものを渡すと、入口が増えて危なくなります。
+- **どういう原理で動くか**: 起動すると、次の順に進みます。
+  1. Compose が `depends_on:` を見て、db が healthy に、redis が started になるのを待つ
+  2. Compose が worker コンテナを作り、`back` の道につなぐ。`.env` の中身を環境変数として渡す
+  3. コンテナの中で `entrypoint.sh` → `celery` に入れ替わる（チャンク2）
+  4. Celery が `-A config` で `celery.py` を読み、受付箱の場所 `redis://redis:6379/1` を知る（P4-6a の地図）
+  5. Celery がサービス名 `redis` で Redis を探し、`back` の道を通ってつなぐ（`Connected to ...`）
+  6. 受付箱を見張り始める（`ready.`）
 
-#### 画像を送る
+<details><summary>💡 networks を書かないと、どうなる？</summary>
 
-送る画像を作ります。Pillow が入った `api` のコンテナで作り、この Mac に受け取ります。
-
-```bash
-docker compose exec -T api .venv/bin/python -c "import sys; from PIL import Image; Image.new('RGB', (1200, 800), 'tan').save(sys.stdout.buffer, 'JPEG')" > sample.jpg
-file sample.jpg
-```
-
-```text
-sample.jpg: JPEG image data, JFIF standard 1.01, ... 1200x800, components 3
-```
-
-✅ 検証済み: Docker Compose v5.5.1
-
-`-T` は、コンテナの出力をそのまま受け取る指定です。付けないと、画面に表示するための変換が混ざり、画像が壊れることがあります。
-
-```bash
-curl -s -F image=@sample.jpg localhost:5173/api/products/1/image
-sleep 2
-curl -s localhost:5173/api/products/1
-```
-
-```text
-{"status": "queued"}
-{"thumbnail_url": "/media/thumbnails/1.jpg", "id": 1, "name": "...", "price": 2800, "description": "..."}
-```
-
-✅ 検証済み: Docker Compose v5.5.1 / Pillow 13.0.0
-
-`logs -f` のターミナルには、次の2行が出ます。
-
-```text
-worker-1  | [... INFO/MainProcess] Task catalog.tasks.make_thumbnail[ffb1fcb3-...] received
-worker-1  | [... INFO/ForkPoolWorker-7] Task catalog.tasks.make_thumbnail[ffb1fcb3-...] succeeded in 0.05s: None
-```
-
-✅ 検証済み: Celery 5.6.3
-
-ブラウザで http://localhost:5173 を再読み込みすると、マグカップの横に茶色の四角（サムネイル）が出ます。
-
-✅ 検証済み: Docker Compose v5.5.1。ブラウザで表示を確認した。
-
-### 6-2. 🔬 仕組み解剖
-
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `command:` | コマンドの上書き | **ランタイム**に、イメージの `CMD` を置き換える。`docker run イメージ 引数...` の引数と同じ（P2-5）。`ENTRYPOINT` はそのまま |
-| `image: ec-api:dev`（`build:` と一緒） | ビルド結果の名前 | ビルドしたイメージに、この名前を付ける。2つのサービスで同じ名前にすると、同じイメージを使う |
-| `docker compose logs -f` | ログの追跡 | コンテナの標準出力と標準エラーを、流れ続けるように表示する。`docker logs -f` のサービス版 |
-| `stop_grace_period` | 停止の猶予 | 6-6 で扱う |
-
-同じイメージが、2つの役割になる様子です。
-
-```text
-                 イメージ ec-api:dev
-         ENTRYPOINT ["./entrypoint.sh"]
-         CMD [".venv/bin/python", "src/manage.py", "runserver", ...]
-                │                                  │
-     api（CMD をそのまま使う）        worker（command: で CMD を置き換え）
-                ▼                                  ▼
-  ./entrypoint.sh .venv/bin/python     ./entrypoint.sh .venv/bin/celery
-    src/manage.py runserver ...          --workdir src -A config worker ...
-```
-
-**見てほしいところ**: `ENTRYPOINT` の `./entrypoint.sh` は、両方で動きます。`exec "$@"`（P2-5）があるので、どちらも本体が PID 1 になります。
-
-`python:3.13-slim` には `ps` が入っていません。PID 1 のコマンドは、`/proc/1/cmdline` で見られます。
-
-```bash
-docker compose exec worker cat /proc/1/cmdline | tr '\0' ' '; echo
-```
-
-```text
-/app/.venv/bin/python .venv/bin/celery --workdir src -A config worker --loglevel info
-```
-
-✅ 検証済み: Docker Compose v5.5.1
-
-PID 1 は `celery` です。`celery` は Python で書かれたプログラムなので、頭に `python` が付いています。`entrypoint.sh` は PID 1 に残っていません。
-
-> 🐧 **Linux注**: `/proc/1/cmdline` には、PID 1 の起動コマンドが入っています。区切りが見えない文字なので、`tr '\0' ' '` で空白に置き換えています。
-
-なぜを下っていきます。
-
-```text
-なぜ、worker は api と同じイメージでよいのか
-  → 仕事のコード（tasks.py）も、DB の設定も、api と同じだから
-      → なぜ、同じイメージで別の動きができるのか
-          → イメージは「中身」、command は「何を起動するか」で、別々に決められるから
-              → なぜ、api が保存した画像を worker が読めるのか
-                  → 2つのコンテナが、同じ volume media をマウントしているから
-```
-
-| 確認すること | 内容 |
-| --- | --- |
-| **既知スタックとの対応** | `package.json` の `scripts` に `dev` と `worker` を並べ、同じコードを別の入口で起動するのに近い |
-| **なぜこの設計か** | イメージを1つにすると、api と worker のコードの版がずれない |
-| **ビルド時かランタイム時か** | `command:` はランタイム。イメージは作り直さない |
-| **ホストからの見え方** | `docker compose ps` の IMAGE 列が同じ。`docker image ls ec-api` は1行だけ |
-| **失敗時の挙動** | `worker` に `media` をつなぎ忘れると、`worker` のログに `FileNotFoundError` が出て、サムネイルができない |
-
-✅ 検証済み: Docker Compose v5.5.1。`worker` から `media:/app/media` を外して起こした。
-
-> 💡補足: `up --build` の出力に、`Image ec-api:dev Built` が2回出ます。Compose は2つのサービスを、それぞれビルドします。中身は同じなので、2回目はキャッシュですぐ終わります。
-
-### 6-3. 🐧 Linux注
-
-`/proc/1/cmdline` は 6-2 で説明しました。
-
-### 6-4. 解説 — なぜこうするか
-
-`api` は `{"status": "queued"}` を、サムネイルを待たずに返しました。重い処理を `worker` に回すと、利用者を待たせずに済みます。そして、`worker` だけを増やしたり止めたりできます。
-
-`worker` は `front` につないでいません。画面から呼ばれることはないからです。
-
-🧠 **Docker の考え方**: イメージは中身、`command:` は役割。1つの中身を、役割ごとに別のコンテナで動かす。
-
-### 6-5. 🔓 教材用の簡略化
-
-> 🔓 **教材用の簡略化**: 画像を Django の `runserver` で配っています。`runserver` は開発用で、`static()` は `DEBUG = True` のときにだけ働きます。worker も root で動いています。
-> **本番では**: P6-1 で Nginx に配らせ、P6-2 で root をやめます。
-> 根拠: https://docs.djangoproject.com/en/5.2/howto/static-files/#serving-files-uploaded-by-a-user-during-development
-
-### 6-6. 🔮 予測 → 動作確認
-
-**問い**: 仕事の途中で `docker compose stop worker` を打つと、仕事は終わるでしょうか。
-
-時間のかかる仕事を再現するため、`worker` に15秒待たせます。
-
-**ファイル**: `compose.yaml`（`worker` に差分）
-
-```diff
-     command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
-+    environment:
-+      THUMBNAIL_DELAY: 15
-```
-
-```bash
-docker compose up -d worker
-sleep 4
-curl -s -F image=@sample.jpg localhost:5173/api/products/2/image
-sleep 2
-time docker compose stop worker
-docker compose ps -a --format '{{.Service}} {{.Status}}' | grep worker
-curl -s localhost:5173/api/products/2 | grep -o '"thumbnail_url": [^,]*'
-```
-
-```text
-{"status": "queued"}
- Container roadmap-sh-docker-worker-1 Stopped
-docker compose stop worker  ... 3.0 total
-worker Exited (137) Less than a second ago
-"thumbnail_url": null
-```
-
-✅ 検証済み: Docker Compose v5.5.1
-
-**仕事は終わりませんでした。** `Exited (137)` は、SIGKILL で強制終了された印です（P2-5）。ログには `Warm shutdown` が出ています。Celery は SIGTERM を受け取り、仕事を終えてから止まろうとしました。でも、待ち時間が先に切れました。
-
-> 💡補足: 待ち時間は、公式では既定 10 秒です。この検証環境では、P2-5 と同じく約3秒で SIGKILL に進みました。どちらでも、15秒の仕事には足りません。
-
-`stop_grace_period` で、待ち時間を延ばします。
-
-**ファイル**: `compose.yaml`（`worker` に差分）
-
-```diff
-     environment:
-       THUMBNAIL_DELAY: 15
-+    stop_grace_period: 30s
-```
-
-```bash
-docker compose up -d worker
-sleep 4
-curl -s -F image=@sample.jpg localhost:5173/api/products/2/image
-sleep 2
-time docker compose stop worker
-docker compose ps -a --format '{{.Service}} {{.Status}}' | grep worker
-curl -s localhost:5173/api/products/2 | grep -o '"thumbnail_url": [^,]*'
-```
-
-```text
-{"status": "queued"}
- Container roadmap-sh-docker-worker-1 Stopped
-docker compose stop worker  ... 15.0 total
-worker Exited (0) Less than a second ago
-"thumbnail_url": "/media/thumbnails/2.jpg"
-```
-
-✅ 検証済み: Docker Compose v5.5.1 / Celery 5.6.3
-
-**仕事を終えてから、`Exited (0)` で止まりました。** ログにも `succeeded in 15.06s` が出ます。
-
-| 部品 | 正式名称 | 実行時に何が起きるか |
-| --- | --- | --- |
-| `stop_grace_period: 30s` | 停止の猶予 | `stop` や `down` で SIGTERM を送ったあと、SIGKILL まで最大30秒待つ。`docker stop -t 30` と同じ |
-
-確かめたら、`environment:` と `THUMBNAIL_DELAY: 15` の2行を消します。`stop_grace_period: 30s` は残します。最後に `docker compose up -d worker` で入れ替えます。
-
-### 6-7. ✅ 想起チェック
-
-1. `api` と `worker` が同じイメージなのに、違う動きをするのは、なぜですか
-2. `api` が保存した画像を、`worker` が読めるのは、なぜですか
-3. `worker` が `Exited (137)` で止まり、仕事が終わっていませんでした。何を延ばしますか
-
-<details><summary>答え</summary>
-
-1. `worker` の `command:` が、イメージの `CMD` を置き換えているから
-2. 2つのコンテナが、同じ volume `media` を `/app/media` にマウントしているから
-3. `stop_grace_period`。SIGTERM のあと、SIGKILL までの待ち時間
+`networks:` を書かないサービスは、Compose が自動で作る **default**（既定の道）につながります。`docker compose config worker` で、`networks: default` と出ることで確かめられます（✅ 検証済み: 2026-11-14）。Redis は `back` にしかいないので、default の道からは届きません。
 
 </details>
 
-### 6-8. 初出トークンの回収確認
+<details><summary>🔓 教材用の簡略化: worker が root で動いている</summary>
 
-| トークン | 扱い |
-| --- | --- |
-| `command:` | 6-1 で実践、6-2 で解剖 |
-| `docker compose logs -f` | 6-1 で実践、6-2 で解剖 |
-| `stop_grace_period` | 6-6 で実践と解剖 |
-| ワーカー、タスクキュー、Celery | 6-1 で解説 |
-| `/proc/1/cmdline` | 6-2 の Linux注 |
+> 🔓 **教材用の簡略化**: worker は、コンテナの中の管理者（**root**、つまり何でもできる一番えらいユーザー）で動いています。Celery はそれを `SecurityWarning` で注意しています。`id` で見ると `uid=0(root)` です。
+> **本番では**: P6-2 で、root ではないユーザーで動かします。
+> 根拠: https://docs.celeryq.dev/en/stable/userguide/daemonizing.html#running-the-worker-with-superuser-privileges-root
 
-### 📇 まとめカード
+</details>
 
-> **同じイメージを、`command:` で別の役割にする。止めるときは、仕事が終わるまで待たせる。**
+**🧪 壊してみる**
 
-**残った問い**: EC は1回の `up` で動いた。でも、`ec-api:dev` は 600MB を超えている。`gcc` も入ったままだ。本番に出すには重すぎないか。
+1. **予想**: `worker` の `command:` の行を消して `docker compose up -d worker` をすると、worker の中で動く PID 1（いちばん最初のプロセス）は何になると思いますか？
+   A. `celery`　B. `runserver`
+2. **実行**: 行を消して保存し、次を打ちます。
+
+   ```bash
+   docker compose up -d worker
+   docker compose exec worker cat /proc/1/cmdline | tr '\0' ' '; echo
+   docker compose logs worker
+   ```
+
+3. **見る**:
+
+   ```text
+   .venv/bin/python src/manage.py runserver 0.0.0.0:8000
+   ```
+
+   ```text
+   worker-1  | API を起動します
+   worker-1  | Watching for file changes with StatReloader
+   ```
+
+   ✅ 検証済み: 2026-11-14
+
+   **worker なのに、api と同じ `runserver` が動きました。** 名前が `worker` でも、中身は同じイメージです。`command:` で貼り替えなければ、イメージの `CMD` がそのまま動きます。ログにも `Connected to redis` は出ません。
+
+   > 🐧 **Linux注**: `/proc/1/cmdline` には、PID 1 を起動した命令が入っています。区切りが見えない文字（`\0`）なので、`tr '\0' ' '` で空白に置き換えて読みます。このイメージ（`python:3.13-slim`）には `ps` が入っていないので、代わりにこれを使います。
+
+4. **元に戻す**: `command:` の行を戻して、もう一度 `docker compose up -d worker` を打ちます。PID 1 を見て、次のように出れば元どおりです。
+
+   ```text
+   /app/.venv/bin/python .venv/bin/celery --workdir src -A config worker --loglevel info
+   ```
+
+   ✅ 検証済み: 2026-11-14
+
+   頭に `python` が付いているのは、`celery` が Python で書かれたプログラムだからです。`entrypoint.sh` は、もう PID 1 に残っていません（チャンク2 の `exec`）。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。紙でも、頭の中でもかまいません。最後の「なぜ」の欄には、一言ずつ書きます。
+
+```text
+イメージ ＿＿＿＿＿＿          なぜ1つ？ → ＿＿＿＿＿＿＿＿
+        │
+        ├──▶ api コンテナ
+        │      イメージの ＿＿＿ のまま → runserver
+        │
+        └──▶ worker コンテナ
+               ＿＿＿＿ で置き換える → celery worker
+                       │   通る道（network）は ＿＿＿
+                       ▼
+               Redis の ＿ 番の部屋（受付箱）
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+イメージ ec-api:dev           なぜ1つ？ → api と worker でコードの版がずれないように
+        │
+        ├──▶ api コンテナ
+        │      イメージの CMD のまま → runserver
+        │
+        └──▶ worker コンテナ
+               command: で置き換える → celery worker
+                       │   通る道（network）は back
+                       ▼
+               Redis の 1 番の部屋（受付箱）
+```
+
+埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「worker は別のイメージが要ると思っていたけど、実は同じイメージで `command:` だけ変えればよかった」
+
+### ✅ できるようになったこと
+
+- [ ] `build:` と一緒に書いた `image:` が「作ったイメージに付ける名前」だと説明できる
+- [ ] `command:` を消すと worker の中で何が動くかを、打つ前に予想できる
+- [ ] worker に `ports:` と `front` が要らない理由を、一言で言える
+
+**残った問い**: worker は受付箱を見張り始めた。でも、`[tasks]` の下は空っぽで、メモを入れる人もまだいない。そもそも、サムネイルの元になる**画像**は、どこから来るのか？ **api は、送られてきた画像をどこに保存すればいいのか？**
+
+---
+▶ **次**: P4-6c 画像を受け取って保存する（まだ作っていません。P4-6b が終わったら作ります）
 
 ---
 
@@ -2326,13 +2583,13 @@ P4 の6ステップはここまで。**次は自分で組む番**です。
 - Todo を扱う API を作る。認証は無し
 - 次の5つの操作を持つ
 
-| 操作 | メソッドとパス |
-| --- | --- |
-| 一覧 | `GET /todos` |
-| 作成 | `POST /todos` |
-| 1件取得 | `GET /todos/{id}` |
-| 更新 | `PUT /todos/{id}` |
-| 削除 | `DELETE /todos/{id}` |
+| 操作    | メソッドとパス       |
+| ------- | -------------------- |
+| 一覧    | `GET /todos`         |
+| 作成    | `POST /todos`        |
+| 1件取得 | `GET /todos/{id}`    |
+| 更新    | `PUT /todos/{id}`    |
+| 削除    | `DELETE /todos/{id}` |
 
 - データは MySQL に保存する
 - API と MySQL を、`compose.yaml` 1つで起動する
@@ -2345,16 +2602,16 @@ P4 の6ステップはここまで。**次は自分で組む番**です。
 
 ### 2. このフェーズで学んだどれを使うか
 
-| 使う | ステップ |
-| --- | --- |
-| `Dockerfile`（`apt-get` を含む） | P2 全体、P3-4 |
-| `ENTRYPOINT` と `exec "$@"` | P2-5 |
-| `services:` `ports:` | P4-1 |
-| `volumes:`（名前付き） | P4-2 |
-| `healthcheck` と `condition: service_healthy` | P4-3 |
-| `build:` と `docker compose exec` | P4-4 |
-| `env_file:` と `docker compose config` | P4-5 |
-| bind mount（任意課題） | P3-2 |
+| 使う                                          | ステップ      |
+| --------------------------------------------- | ------------- |
+| `Dockerfile`（`apt-get` を含む）              | P2 全体、P3-4 |
+| `ENTRYPOINT` と `exec "$@"`                   | P2-5          |
+| `services:` `ports:`                          | P4-1          |
+| `volumes:`（名前付き）                        | P4-2          |
+| `healthcheck` と `condition: service_healthy` | P4-3          |
+| `build:` と `docker compose exec`             | P4-4          |
+| `env_file:` と `docker compose config`        | P4-5          |
+| bind mount（任意課題）                        | P3-2          |
 
 **不要なもの**: `networks:`（サービスが2つで、分ける理由がない）/ `watch`（Python は bind mount で足りる）/ `command:` と `stop_grace_period`（ワーカーがない）/ Redis。
 
@@ -2413,32 +2670,32 @@ projects/multi-container-service/
 
 ```yaml
 services:
-  db:
-    image: mysql:8.4
-    env_file:
-      - ./db.env
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
-      interval: 2s
-      timeout: 5s
-      retries: 30
-    volumes:
-      - db-data:/var/lib/mysql
+    db:
+        image: mysql:8.4
+        env_file:
+            - ./db.env
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+            interval: 2s
+            timeout: 5s
+            retries: 30
+        volumes:
+            - db-data:/var/lib/mysql
 
-  api:
-    build: .
-    ports:
-      - "3000:8000"
-    env_file:
-      - ./api.env
-    volumes:
-      - ./src:/app/src
-    depends_on:
-      db:
-        condition: service_healthy
+    api:
+        build: .
+        ports:
+            - "3000:8000"
+        env_file:
+            - ./api.env
+        volumes:
+            - ./src:/app/src
+        depends_on:
+            db:
+                condition: service_healthy
 
 volumes:
-  db-data:
+    db-data:
 ```
 
 **ファイル**: `db.env`
