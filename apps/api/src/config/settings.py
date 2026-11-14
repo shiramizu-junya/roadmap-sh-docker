@@ -21,3 +21,5 @@ DATABASES = {
 }
 
 REDIS_URL = os.environ["REDIS_URL"]
+CELERY_BROKER_URL = os.environ["BROKER_URL"]
+
