@@ -1,0 +1,9 @@
+{
+    // compose.yaml を保存すると、自動整形で watch: の字下げが崩れて
+    // YAML として読めなくなるため、このリポジトリの YAML は保存時に整形しない
+    "languages": {
+        "YAML": {
+            "format_on_save": "off"
+        }
+    }
+}

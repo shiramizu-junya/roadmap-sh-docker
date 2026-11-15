@@ -20,6 +20,7 @@ services:
 
     api:
         build: ./apps/api
+        image: ec-api:dev
         depends_on:
             db:
                 condition: service_healthy
@@ -39,6 +40,22 @@ services:
             - front
             - back
 
+    worker:
+        build: ./apps/api
+        image: ec-api:dev
+        depends_on:
+            db:
+                condition: service_healthy
+            redis:
+                condition: service_started
+        env_file:
+            - ./apps/api/.env
+        volumes:
+            - ./apps/api/src:/app/src
+        networks:
+            - back
+        command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
+
     redis:
         image: redis:8-alpine
         ports:
@@ -56,11 +73,9 @@ services:
             - front
         develop:
             watch:
-                - action: sync
-                  path: ./apps/web/src
-                  target: /app/src
-                - action: rebuild
-                  path: ./apps/web/package.json
+                # 1項目を1行で書く（{ } の書き方）。保存時の整形で字下げが崩れないようにするため
+                - { action: sync, path: ./apps/web/src, target: /app/src }
+                - { action: rebuild, path: ./apps/web/package.json }
 
 volumes:
     db-data:
