@@ -1,6 +1,11 @@
 {
   "venvPath": "apps/api",
   "venv": ".venv",
-  "extraPaths": ["apps/api/src"],
-  "include": ["apps/api/src"]
+  "extraPaths": [
+    "apps/api/src"
+  ],
+  "include": [
+    "apps/api/src"
+  ],
+  "typeCheckingMode": "standard"
 }

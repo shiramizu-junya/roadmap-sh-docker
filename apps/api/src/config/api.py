@@ -1,7 +1,7 @@
 import redis
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from ninja import Header, ModelSchema, NinjaAPI, Schema
+from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
 
 from catalog.models import Product
 
@@ -46,3 +46,10 @@ def add_cart_item(request, item: CartItemIn, cart_id: str = Header(alias="X-Cart
     get_object_or_404(Product, id=item.product_id)
     cart_store.hincrby(f"cart:{cart_id}", item.product_id, item.quantity)
     return get_cart(request, cart_id)
+
+
+@api.post("/products/{product_id}/image")
+def uploada_image(request, product_id: int, image: File[UploadedFile]):
+    product = get_object_or_404(Product, id=product_id)
+    product.image.save(image.name, image)
+    return {"status": "saved"}
