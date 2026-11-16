@@ -1739,10 +1739,11 @@ curl -s localhost:5173/api/cart
 | **P4-6a** | 受付箱の場所を Celery に教える                | ②③の準備 |
 | P4-6b     | worker コンテナを起動する                     | ③        |
 | P4-6c     | 画像を受け取って保存する                      | ①        |
-| P4-6d     | メモを受付箱に入れ、worker に届ける           | ②③       |
-| P4-6e     | サムネイルを作る                              | ④        |
-| P4-6f     | 画面にサムネイルを出す                        | ⑤        |
-| P4-6g     | worker を止めるとき、仕事が終わるまで待たせる | ③④       |
+| P4-6d     | 画像の倉庫を作って worker と分け合う          | ①④の準備 |
+| P4-6e     | メモを受付箱に入れ、worker に届ける           | ②③       |
+| P4-6f     | サムネイルを作る                              | ④        |
+| P4-6g     | 画面にサムネイルを出す                        | ⑤        |
+| P4-6h     | worker を止めるとき、仕事が終わるまで待たせる | ③④       |
 
 P4-6b 以降は、P4-6a が終わってから作ります。
 
@@ -2344,7 +2345,7 @@ worker に話しかけるのは誰でしょう？ Mac のブラウザ？ web コ
 | ③ `volumes:`（src） | **要る** | Mac で書いたコードを、コンテナの中にすぐ写すため。`tasks.py` を書いたとき、作り直さずに使える |
 | ④ `front` | **要らない** | `front` は web と api が話す道。worker は画面とは話さない |
 | ⑤ `back` | **要る** | Redis と DB がいる道。受付箱（Redis）に行くのに要る |
-| ⑥ `depends_on:` | **要る** | 受付箱（Redis）が無いと、つなぐ相手がいない。DB は P4-6e で商品を読むときに使う |
+| ⑥ `depends_on:` | **要る** | 受付箱（Redis）が無いと、つなぐ相手がいない。DB は P4-6f で商品を読むときに使う |
 
 </details>
 
@@ -2407,7 +2408,7 @@ worker-1  | [... INFO/MainProcess] celery@0d42f40193ee ready.
 | `celery@... v5.6.3 (recovery)` | Celery の版。`recovery` は 5.6 系に付いた**愛称**（コードネーム）で、「復旧中」という意味ではない |
 | `.> transport: redis://:**@redis:6379/1` | 受付箱の場所。P4-6a で `.env` に書いた値 |
 | `.> concurrency: 12 (prefork)` | 同時にこなせる仕事の数。CPU の数で決まる（環境ごとに違う） |
-| `[tasks]` の下が空 | **まだ仕事の種類が1つも無い**。P4-6d で作る |
+| `[tasks]` の下が空 | **まだ仕事の種類が1つも無い**。P4-6e で作る |
 
 **`docker compose logs -f`**: ログを**流し続けて**見たいときは、`-f` を付けます。
 
@@ -2417,7 +2418,7 @@ docker compose logs -f worker
 
 > 📇 **logs -f** — 正式名称: `docker compose logs` の **--follow**（追いかける）オプション
 > かみくだくと: ログを「いままでの分を見せて終わり」ではなく、**新しい行が出るたびに画面に足し続ける**。
-> この教材では: 別のターミナルで開いておき、P4-6d でメモが届く瞬間を見る。止めるときは Ctrl+C。止めても worker は止まらない。
+> この教材では: 別のターミナルで開いておき、P4-6e でメモが届く瞬間を見る。止めるときは Ctrl+C。止めても worker は止まらない。
 
 **📖 しくみ**
 
@@ -2535,7 +2536,551 @@ docker compose logs -f worker
 **残った問い**: worker は受付箱を見張り始めた。でも、`[tasks]` の下は空っぽで、メモを入れる人もまだいない。そもそも、サムネイルの元になる**画像**は、どこから来るのか？ **api は、送られてきた画像をどこに保存すればいいのか？**
 
 ---
-▶ **次**: P4-6c 画像を受け取って保存する（まだ作っていません。P4-6b が終わったら作ります）
+▶ **次**: P4-6c 画像を受け取って保存する
+
+---
+
+## P4-6c: 画像を受け取って保存する
+
+**❓ この回の問い**: 前回（P4-6b）の答えは「worker は api と同じイメージで、受付箱を見張り始めた」だった。でも、サムネイルの元になる**画像**は、まだどこにも無い。
+→ **api は、送られてきた画像を受け取って、どこに保存すればいいのか？**
+
+**作ること / 確かめること**: Mac の `curl` から画像を送り、api コンテナの中に保存されることを確かめる。さらに、**api を作り直すと画像がどうなるか**を確かめる
+**重要度**: 🔴 毎日使う — 「ファイルを受け取って置く」は、Web アプリでよく出る形だから
+**前ステップとの接続**: P4-6b までの api に、受け取り口と置き場を足す
+
+**P4-6 ぜんたいの地図での位置**: ①（api が画像を受け取って保存する）
+
+### 🔁 前回の思い出し
+
+**問い**: 全体の地図を描いたとき、redis の箱を消して作り直したら、`cart:test` はどうなりましたか？ そして、なぜでしたか？
+
+<details><summary>答え</summary>
+
+**消えました。** redis には倉庫（volume）が無いので、データは箱の中にしかありません。箱を消すと、データも一緒に消えます。db は倉庫 `db-data` があるので消えません。今日の 🧪 で、同じことが**画像**にも起きるかを確かめます。
+
+</details>
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の地図に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+curl          ── :8000 どこからでも ──▶ api   ★ 今日: 画像の受け取り口を足す
+Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
+                                        api の中に /app/media     ★ 今日: 画像の置き場（倉庫なし）
+
+                                        【道 back】 api・worker・db・redis
+                                        api ──▶ db、redis
+DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消えない）
+                                                ★ 今日: 商品の表に image の列を足す
+Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
+                                                0番の部屋: カート / 1番の部屋: 受付箱
+（窓口なし）                            worker ──▶ redis の 1番を見張る
+```
+
+**見てほしいところ**: 今日は **api の中**と **db の表**だけをさわります。新しい箱も、新しい道も増えません。
+
+### 🗺️ 今日の地図
+
+```text
+Mac の curl
+   │ 画像を送る（:8000 の窓口から）
+   ▼
+③ 受け取り口  api.py の upload_image         … チャンク3
+   │
+   ├──▶ 画像そのもの
+   │      ② 置き場  settings.py の MEDIA_ROOT  … チャンク2
+   │         → /app/media/products/sample.jpg（api コンテナの中）
+   │
+   └──▶ 置き場所の「文字」だけ
+          ① 列  models.py の image             … チャンク1
+             → db の表 catalog_product の image 列 = "products/sample.jpg"
+```
+
+**見てほしいところ**: 画像は**2か所に分かれて**記録されます。画像そのものはコンテナの中のフォルダへ。db には「どこに置いたか」という**文字だけ**が入ります。
+作る順番（①→②→③）は、画像が流れる順番（③→②・①）の**逆**です。受け取り口を先に作っても、置き場と列が無ければ保存できないからです。
+
+### 6c-0. このステップの初出
+
+**Docker**: `docker compose exec -T`、`docker compose up --force-recreate`
+**Linux**: なし
+**その他**: Pillow、`ImageField`、`MEDIA_ROOT`、multipart/form-data
+
+### 準備: Pillow を入れる
+
+> 📇 **Pillow（ピロー）** — 正式名称: **Pillow**（Python Imaging Library の後継）
+> かみくだくと: Python で**画像を開いたり、大きさを調べたり、縮めたり**するための部品。
+> 似た言葉との違い: Celery（P4-6a）= 仕事を**あとで別の係に頼む**部品。Pillow = **画像そのもの**を扱う部品。
+> この教材では: チャンク1 の `ImageField` が、送られてきたものが本当に画像かを調べるのに使う。P4-6f でサムネイルを作るのにも使う。
+
+P4-6a の Celery と同じ入れ方です。コマンドなので、そのまま打ちます。
+
+**実行場所**: リポジトリのいちばん上（`roadmap-sh-docker/`）
+
+```bash
+cd apps/api
+uv add --no-sync 'pillow>=13.0,<13.1'
+cd ../..
+grep -A1 'name = "pillow"$' apps/api/uv.lock
+```
+
+```text
+name = "pillow"
+version = "13.0.0"
+```
+
+✅ 検証済み: uv 0.13.7（Mac）/ 2026-11-15
+
+部品が入ったイメージを作り直し、api と worker を入れ替えます。2つは同じイメージ `ec-api:dev` を使っているので（P4-6b）、両方を入れ替えます。
+
+```bash
+docker compose build api
+docker compose up -d api worker
+```
+
+`docker compose ps` で、api と worker がどちらも `Up` になっていれば OK です。
+
+---
+### チャンク1: 商品の表に「画像の置き場所」の列を足す（`apps/api/src/catalog/models.py`）— 地図の①
+
+**このチャンクの目的**: 商品が「自分の画像はどこにあるか」を覚えておけるようにする。
+
+> 📇 **ImageField** — 正式名称: Django の **ImageField**（画像用のフィールド）。仲間に **FileField**（ファイル用のフィールド）がある
+> かみくだくと: 商品の表に足す**「画像の置き場所メモ」の列**。画像そのものではなく、置き場所の文字を覚える。
+> 似た言葉との違い: `CharField`（名前の列）= 文字をそのまま覚える。`ImageField` = 文字（置き場所）を覚えるうえに、**保存のときに画像かどうかを Pillow で調べ、ファイルの保存も引き受ける**。
+> この教材では: `Product`（商品）に `image` という列を足す。
+
+**🤔 先に考える**: 画像を保存したとき、db（MySQL）の表には何が入ると思いますか？
+A. 画像そのもの（写真のデータ）　B. 画像の置き場所を表す**文字**だけ
+
+理由も一言で（「分からない」でも大丈夫です）。
+
+<details><summary>答え</summary>
+
+**B** です。db には `"products/sample.jpg"` のような**文字だけ**が入ります。画像そのものは、ファイルとしてフォルダに置きます（チャンク2）。
+
+このチャンクの ▶️ が終わったら、次のコマンドで、db に足される列を SQL（db への命令文）で見られます。
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py sqlmigrate catalog 0002
+```
+
+```text
+--
+-- Add field image to product
+--
+ALTER TABLE `catalog_product` ADD COLUMN `image` varchar(100) DEFAULT '' NOT NULL;
+ALTER TABLE `catalog_product` ALTER COLUMN `image` DROP DEFAULT;
+```
+
+✅ 検証済み: Django 5.2 / MySQL 8.4（2026-11-15）
+
+`varchar(100)` は「**100文字までの文字**」という型です。画像そのものを入れる型ではありません。
+
+</details>
+
+**🎯 書くもの**: `models.py` の `description = ...` の**すぐ下**に、`image` という列を1行足す。保存先のフォルダ名は `products/`。画像が無い商品もあってよい。
+
+**🔬 1行ずつ分解**（初めて出る形なので、**先に読んでから手で打ちます**）:
+
+`image = models.ImageField(upload_to="products/", blank=True)`
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `image` | イメージ | 列の名前。db の表では `image` という列になる | 名前を変えると、列の名前も変わる |
+| `models.ImageField` | イメージフィールド（ImageField） | 画像の置き場所を覚える列の型 | Pillow が無いと、起動の点検で止まる: `(fields.E210) Cannot use ImageField because Pillow is not installed.`（✅ 検証済み: 2026-11-15） |
+| `upload_to="products/"` | アップロード トゥー（upload_to） | 置き場（チャンク2）の中の、**どのフォルダ**に入れるか | 変えると、別のフォルダに入る |
+| `blank=True` | ブランク（blank） | 「画像が無い商品があってもよい」 | 消すと、Django の入力チェックで「画像は**必須**」になる。db の列そのものは変わらない。今ある3つの商品は画像を持っていないので、空を許しておく |
+
+**✍️ 自分で書く**: 上の1行を、表を思い出しながら手で打ちます。コピペはしません。
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+     price = models.PositiveIntegerField()
+     description = models.TextField(blank=True)
++    image = models.ImageField(upload_to="products/", blank=True)
+ 
+     def __str__(self):
+```
+
+</details>
+
+**▶️ 確かめる**: 列を足すための設計図（マイグレーション）を作り、db に当てます。
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py makemigrations catalog
+docker compose exec api .venv/bin/python src/manage.py migrate
+```
+
+```text
+Migrations for 'catalog':
+  src/catalog/migrations/0002_product_image.py
+    + Add field image to product
+```
+
+```text
+Operations to perform:
+  Apply all migrations: catalog
+Running migrations:
+  Applying catalog.0002_product_image... OK
+```
+
+✅ 検証済み: Django 5.2 / MySQL 8.4（2026-11-15）
+
+`Applying ... OK` が出れば、db の表に `image` 列ができています。設計図のファイル `0002_product_image.py` は、bind mount を通って **Mac の `apps/api/src/catalog/migrations/` にも**できています。
+
+**🔎 答えの見つけ方**: 設計図が db に当たったかは `docker compose exec api .venv/bin/python src/manage.py showmigrations catalog`。`[X] 0002_product_image` と、`X` が付いていれば当たっている。どんな SQL になるかは `sqlmigrate`（🤔 の答え）。
+
+**📖 しくみ**
+
+- **何をしているか**: 商品の表 `catalog_product` に、`image` という**文字の列**を足しています。
+- **なぜ必要か**: 画像のファイルは、フォルダに置いただけでは「どの商品の画像か」が分かりません。商品の行に置き場所を書いておけば、商品から画像をたどれます。画像そのものを db に入れないのは、db を重く遅くしないためです。Django の公式ドキュメントにも「db に入るのはファイルへの道筋（パス）だけ」と書いてあります。
+  根拠: https://docs.djangoproject.com/en/5.2/ref/models/fields/#filefield
+- **どういう原理で動くか**:
+  1. あなたが `models.py` に1行足す（まだ db は変わらない）
+  2. `makemigrations` を打つと、**Django** が `models.py` と今までの設計図を見比べ、差分を `0002_product_image.py` に書く
+  3. `migrate` を打つと、**Django** がその設計図を SQL（`ALTER TABLE ... ADD COLUMN`）に直して、**MySQL** に送る
+  4. **MySQL** が表に列を足す。db の中身は倉庫 `db-data` にあるので、箱を作り直しても列は残る
+
+---
+### チャンク2: 画像そのものの置き場を決める（`apps/api/src/config/settings.py`）— 地図の②
+
+**このチャンクの目的**: 画像のファイルを、コンテナの中の**どのフォルダ**に置くかを決める。
+
+> 📇 **MEDIA_ROOT** — 正式名称: Django の設定 **MEDIA_ROOT**（メディア ルート）。media files（利用者がアップロードしたファイル）の置き場の**根っこ**
+> かみくだくと: 送られてきた画像を入れる**いちばん上のフォルダ**。チャンク1 の `upload_to="products/"` は、この中のフォルダ。
+> 似た言葉との違い: `MEDIA_URL`（メディア ユーアールエル）= その画像を**ブラウザから見るときの住所**。P4-6g で使う。今日は置き場だけ決める。
+> この教材では: `/app/media`（api コンテナの中のフォルダ）。
+
+**🤔 先に考える**: もし `MEDIA_ROOT` を書かずに画像を保存したら、どうなると思いますか？
+A. 保存できずにエラーになる　B. エラーにならず、どこか別の場所に置かれる
+
+<details><summary>答え</summary>
+
+**B** です。`MEDIA_ROOT` の初期値は `''`（空っぽ）です。空っぽだと、Django は「いま居るフォルダ」を根っこにします。api コンテナで居るフォルダは `/app`（Dockerfile の `WORKDIR /app`、P2）なので、画像は `/app/products/sample.jpg` に置かれます。コードの近くに、画像がばらばらに散らばってしまいます。
+
+✅ 検証済み: 2026-11-15（`MEDIA_ROOT` を消して送り、`/app/products/sample.jpg` ができるのを確かめた）
+
+</details>
+
+**🎯 書くもの**: `settings.py` の**いちばん下**（`CELERY_BROKER_URL = ...` の下）に、置き場を `/app/media` にする1行を足す。
+
+**✍️ 自分で書く**（`名前 = "値"` の形は P4-5・P4-6a で書いたので、穴埋めです）
+
+```python
+CELERY_BROKER_URL = os.environ["BROKER_URL"]
+
+___ = "___"
+```
+
+<details><summary>ヒント1</summary>
+
+1つ目の `___` は、📇 カードの名前です。2つ目は、🧭 の地図に書いた api の中のフォルダです。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ REDIS_URL = os.environ["REDIS_URL"]
+ CELERY_BROKER_URL = os.environ["BROKER_URL"]
++
++MEDIA_ROOT = "/app/media"
+```
+
+</details>
+
+**▶️ 確かめる**: Django が置き場を知っているかを聞きます。
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py shell -c "from django.conf import settings; print(settings.MEDIA_ROOT)"
+```
+
+```text
+1 object imported automatically (use -v 2 for details).
+
+/app/media
+```
+
+✅ 検証済み: Django 5.2（2026-11-15）
+
+最後の行が `/app/media` なら OK です。P4-6a の `run` と違って、`exec` は動いている箱の中で打つだけなので、`API を起動します` の行は出ません。
+
+**🔎 答えの見つけ方**: 置き場のフォルダが**本当にあるか**は、`docker compose exec api ls /app/media`。いまは `No such file or directory`（まだ無い）と出ます。フォルダは、最初の画像を保存したときに Django が作ります（チャンク3 で確かめます）。
+
+**🔬 1行ずつ分解**:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `MEDIA_ROOT` | メディア ルート（MEDIA_ROOT） | 送られてきたファイルの置き場の根っこ。Django が決まった名前で探す | 消すと、いま居るフォルダ `/app` が根っこになる（🤔 の答え） |
+| `"/app/media"` | — | api コンテナの中のフォルダ。`/` で始まるので、どこに居ても同じ場所を指す（絶対パス） | — |
+
+**📖 しくみ**
+
+- **何をしているか**: 画像のファイルを置く、いちばん上のフォルダを `/app/media` に決めています。
+- **なぜ必要か**: 決めないと、画像がコードのすぐ横（`/app/products/`）に散らばります。置き場を1つにまとめておけば、あとで**そのフォルダだけを倉庫（volume）にする**ことができます（P4-6d への伏線）。
+- **どういう原理で動くか**: 保存するとき、**Django** が3つをつないで置き場所を決めます。
+
+  ```text
+  MEDIA_ROOT        upload_to        送られてきたファイル名
+  /app/media   +   products/    +   sample.jpg
+        ↓
+  /app/media/products/sample.jpg   ← ファイルはここに置く
+           products/sample.jpg     ← db の image 列にはここだけ書く
+  ```
+
+  db に入るのは、`MEDIA_ROOT` から**先の部分だけ**です。だから、あとで置き場を変えても、db の文字は書き換えなくて済みます。
+
+---
+### チャンク3: 画像の受け取り口を作る（`apps/api/src/config/api.py`）— 地図の③
+
+**このチャンクの目的**: Mac から送られてきた画像を受け取り、チャンク1・2 で決めた場所に保存する**窓口**を作る。
+
+> 📇 **multipart/form-data** — 正式名称: **multipart/form-data**（マルチパート フォームデータ）。HTTP でファイルを送るときの**送り方の形**
+> かみくだくと: 1回の送信を**いくつかの区切り（パート）**に分けて、文字もファイルもまとめて送れる形。Web ページの「ファイルを選ぶ」ボタン付きフォームが使っているのと同じ。
+> 似た言葉との違い: JSON（P4-5 のカート）= **文字だけ**を送る形。画像のような中身（バイナリ）は、そのままでは入れられない。
+> この教材では: `curl -F image=@...` が、この形で送る。受け取る側は Django Ninja の `File[UploadedFile]`。
+
+**🤔 先に考える**: カート（P4-5）は JSON で送りました。画像も、同じ JSON の形で送れると思いますか？
+A. 送れる　B. 別の形が要る
+
+<details><summary>答え</summary>
+
+**B** です。JSON は文字だけを入れる形です。このチャンクで作る窓口に JSON を送ると、「`image` が無い」と断られます。
+
+```text
+{"detail": [{"type": "missing", "loc": ["file", "image"], "msg": "Field required"}]}
+```
+
+✅ 検証済み: 2026-11-15（JSON で送ると `422` が返る）
+
+`"loc": ["file", "image"]` は「**ファイルの**区切りの中に `image` が無い」という意味です。窓口は、multipart/form-data の形でファイルが届くのを待っています。
+
+</details>
+
+**🎯 書くもの**: 2か所を変える。
+
+1. いちばん上の `from ninja import ...` の行に、`File` と `UploadedFile` を足す
+2. `@api.get("/cart")` の**すぐ前**に、`POST /products/{product_id}/image` の窓口を5行で書く。商品を探し、その商品の `image` に保存し、`{"status": "saved"}` を返す
+
+**✍️ 自分で書く — その1**（import は、足す2つの名前を埋める穴埋めです）
+
+```python
+from ninja import ___, Header, ModelSchema, NinjaAPI, Schema, ___
+```
+
+<details><summary>答え合わせ</summary>
+
+```diff
+-from ninja import Header, ModelSchema, NinjaAPI, Schema
++from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
+```
+
+名前は ABC 順（大文字が先）に並べています。順番が違っても動きます。
+
+</details>
+
+**🔬 1行ずつ分解**（窓口の5行は初めて出る形なので、**先に読んでから手で打ちます**）:
+
+```python
+@api.post("/products/{product_id}/image")
+def upload_image(request, product_id: int, image: File[UploadedFile]):
+    product = get_object_or_404(Product, id=product_id)
+    product.image.save(image.name, image)
+    return {"status": "saved"}
+```
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `@api.post(...)` | デコレータ（decorator） | 「`POST` でこの住所に来たら、下の関数を呼ぶ」。P4-5 のカートと同じ形 | `get` にすると、`curl -F` の送信は受け付けられない |
+| `{product_id}` | パスパラメータ（path parameter） | 住所の中の、商品番号が入る場所 | — |
+| `product_id: int` | — | 住所の `{product_id}` を数として受け取る | — |
+| `image: File[UploadedFile]` | アップロードファイル（UploadedFile） | multipart/form-data の中の `image` という区切りを、**ファイルとして**受け取る | `image` を付けずに送ると `422`（`"msg": "Field required"`）。✅ 検証済み |
+| `get_object_or_404(...)` | ゲット オブジェクト オア フォーオーフォー | 商品を探す。無ければ `404` を返して止める | 無い番号（999）だと `{"detail": "Not Found: No Product matches the given query."}`。✅ 検証済み |
+| `product.image.save(名前, 中身)` | フィールドファイルの save（FieldFile.save） | ①ファイルを置き場に書き、②db の `image` 列に置き場所を書き、③商品の行を保存する。**この1行で3つ** | 消すと、受け取っただけで何も残らない |
+| `image.name` | — | 送られてきたファイルの名前（`sample.jpg`） | — |
+| `return {"status": "saved"}` | — | 「保存した」と返事をする | — |
+
+**✍️ 自分で書く — その2**: 上の5行を、表を思い出しながら手で打ちます。コピペはしません。`@api.get("/cart")` の**前**に、空行を2行あけて置きます。
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+     return get_object_or_404(Product, id=product_id)
+ 
+ 
++@api.post("/products/{product_id}/image")
++def upload_image(request, product_id: int, image: File[UploadedFile]):
++    product = get_object_or_404(Product, id=product_id)
++    product.image.save(image.name, image)
++    return {"status": "saved"}
++
++
+ @api.get("/cart")
+ def get_cart(request, cart_id: str = Header(alias="X-Cart-Id")):
+```
+
+</details>
+
+**▶️ 確かめる**: 送る画像を用意して、送って、置かれたかを見ます。ここはコマンドなので、そのまま打ちます。
+
+まず、送る画像を作ります。Pillow が入った api コンテナで、薄茶色の四角い画像を作り、Mac の `/tmp/sample.jpg` に受け取ります。
+
+```bash
+docker compose exec -T api .venv/bin/python -c "import sys; from PIL import Image; Image.new('RGB', (1200, 800), 'tan').save(sys.stdout.buffer, 'JPEG')" > /tmp/sample.jpg
+file /tmp/sample.jpg
+```
+
+```text
+/tmp/sample.jpg: JPEG image data, JFIF standard 1.01, ... 1200x800, components 3
+```
+
+`-T` は「コンテナの出力を、そのまま受け取る」指定です。付けないと、画面に表示するための変換が混ざって、画像が壊れることがあります。
+
+次に、送ります。全体の地図の `curl ── :8000` の窓口を通ります。
+
+```bash
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+docker compose exec api ls /app/media/products/
+```
+
+```text
+{"status": "saved"}
+sample.jpg
+```
+
+✅ 検証済み: 2026-11-15。手元と同じファイルを別の場所に写して確認した（イメージ名は `ec-api:p46c`。`curl` は Mac からではなく、front の道の中から api に送った）
+
+`sample.jpg` が見えれば、画像は api コンテナの `/app/media/products/` に置かれています。チャンク2 の 🔎 で「まだ無い」と言われたフォルダを、Django が作りました。
+
+> 💡 同じ名前でもう一度送ると、上書きはされません。Django が `sample_LqBfnuc.jpg` のように、後ろに文字を足して別の名前にします（文字は毎回違います）。✅ 検証済み
+
+**🔎 答えの見つけ方**: 送ったのに置かれていないときは、`docker compose logs api` の最後を見ます。`"POST /api/products/1/image HTTP/1.1" 200 19` なら成功、`404` は商品が無い、`422` は送り方の形か名前（`image`）が違う、です。
+
+**📖 しくみ**
+
+- **何をしているか**: Mac から届いた画像を、商品1番の画像として保存する窓口を作りました。
+- **なぜ必要か**: サムネイルを作るには、まず元の画像が要ります。worker（P4-6b）が仕事をするための、**材料を受け取る入口**です。
+- **どういう原理で動くか**:
+  1. **Mac の curl** が、画像を multipart/form-data の形で `localhost:8000` に送る
+  2. ポート公開（`8000:8000`）を通って、**api コンテナの runserver** に届く
+  3. **Django Ninja** が住所 `/api/products/1/image` を見て、`upload_image` を呼ぶ。`image` の区切りを `UploadedFile` にして渡す
+  4. `get_object_or_404` が、**MySQL** から商品1番を探す
+  5. `product.image.save` が、**Pillow** で画像かを確かめ、`/app/media/products/sample.jpg` にファイルを書き、**MySQL** の `image` 列に `products/sample.jpg` と書く
+  6. `{"status": "saved"}` を返す
+
+**🧪 壊してみる**
+
+今日の画像は、**api コンテナの中のフォルダ**に置きました。全体の地図を描いたときの redis と比べてみましょう。
+
+1. **予想**: api の箱を作り直したら、`/app/media/products/sample.jpg` はどうなると思いますか？
+   A. 残る　B. 消える
+2. **実行**: `--force-recreate`（設定が変わっていなくても、箱を**作り直す**指定）を付けて、api だけを作り直します。
+
+   ```bash
+   docker compose up -d --force-recreate api
+   docker compose exec api ls /app/media/products/
+   ```
+
+3. **見る**:
+
+   ```text
+   ls: cannot access '/app/media/products/': No such file or directory
+   ```
+
+   ✅ 検証済み: 2026-11-15
+
+   部品に分けて読みます。
+
+   | 部品 | 意味 |
+   | --- | --- |
+   | `ls:` | `ls` コマンドからの知らせ |
+   | `cannot access '/app/media/products/'` | このフォルダを見られない |
+   | `No such file or directory` | **そんなファイルもフォルダも無い** |
+
+   **画像は、フォルダごと消えました。** redis のカートと同じです。api には `/app/media` 用の倉庫（volume）が無いので、ファイルは箱の中にしかありません。箱を作り直すと、一緒に消えます。
+
+4. **db のほうはどうか**: 次を打ちます。
+
+   ```bash
+   docker compose exec api .venv/bin/python src/manage.py shell -c "import os; from catalog.models import Product; p = Product.objects.get(id=1); print(p.image.name); print(os.path.exists(p.image.path))"
+   ```
+
+   ```text
+   1 object imported automatically (use -v 2 for details).
+
+   products/sample.jpg
+   False
+   ```
+
+   ✅ 検証済み: 2026-11-15
+
+   db の `image` 列には `products/sample.jpg` が**残っています**（db は倉庫 `db-data` があるから）。でも `os.path.exists`（そのファイルは本当にある？）は `False`（無い）です。**db は「ここにある」と言っているのに、ファイルが無い**という食い違いが起きました。
+
+   元に戻すものはありません。画像は P4-6d で倉庫を作ってから、もう一度送ります。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。最後の2つの「なぜ」には、一言ずつ書きます。
+
+```text
+Mac の curl
+   │ 画像を ＿＿＿＿＿＿＿＿＿ の形で送る（JSON ではない）
+   ▼
+③ 受け取り口  api.py の upload_image
+   │
+   ├──▶ 画像そのもの → ＿＿＿＿＿＿/products/sample.jpg
+   │                    （settings.py の ＿＿＿＿＿＿ で決めた）
+   │
+   └──▶ 置き場所の「文字」だけ → db の ＿＿＿＿ 列
+
+なぜ、画像そのものを db に入れない？   → ＿＿＿＿＿＿＿＿
+api を作り直すと、画像はどうなる？     → ＿＿＿＿（理由: ＿＿＿＿＿＿＿＿）
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+Mac の curl
+   │ 画像を multipart/form-data の形で送る（JSON ではない）
+   ▼
+③ 受け取り口  api.py の upload_image
+   │
+   ├──▶ 画像そのもの → /app/media/products/sample.jpg
+   │                    （settings.py の MEDIA_ROOT で決めた）
+   │
+   └──▶ 置き場所の「文字」だけ → db の image 列
+
+なぜ、画像そのものを db に入れない？   → db を重く遅くしないため。db には置き場所の文字だけ
+api を作り直すと、画像はどうなる？     → 消える（理由: /app/media に倉庫が無く、箱の中にしか無いから）
+```
+
+埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「画像は db に入ると思っていたけど、実は db には置き場所の文字だけが入っていた」
+
+### ✅ できるようになったこと
+
+- [ ] 画像を保存したとき、ファイルと db にそれぞれ何が入るかを説明できる
+- [ ] `MEDIA_ROOT` と `upload_to` から、ファイルの置き場所を組み立てられる
+- [ ] api の箱を作り直したら画像がどうなるかを、打つ前に予想できる
+
+**残った問い**: 画像は、api の箱を作り直すと消えてしまった。それに、worker の箱の中にも `/app/media` は無い（`docker compose exec worker ls /app/media` → `No such file or directory`。✅ 検証済み）。**画像を消えない倉庫に置き、しかも worker からも見えるようにするには、どうすればいいのか？**
+
+---
+▶ **次**: P4-6d 画像の倉庫を作って worker と分け合う（まだ作っていません。P4-6c が終わったら作ります）
 
 ---
 
