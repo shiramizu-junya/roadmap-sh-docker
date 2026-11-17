@@ -36,6 +36,7 @@ services:
             DEBUGPY: ${DEBUGPY:-0}
         volumes:
             - ./apps/api/src:/app/src
+            - media:/app/media
         networks:
             - front
             - back
@@ -52,6 +53,7 @@ services:
             - ./apps/api/.env
         volumes:
             - ./apps/api/src:/app/src
+            - media:/app/media
         networks:
             - back
         command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
@@ -79,6 +81,7 @@ services:
 
 volumes:
     db-data:
+    media:
 
 networks:
     front:
