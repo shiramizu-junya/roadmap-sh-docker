@@ -2943,7 +2943,7 @@ file /tmp/sample.jpg
 
 `-T` は「コンテナの出力を、そのまま受け取る」指定です。付けないと、画面に表示するための変換が混ざって、画像が壊れることがあります。
 
-次に、送ります。全体の地図の `curl ── :8000` の窓口を通ります。
+次に、送ります。全体の地図（`docs/02-system-map.md`）の `curl ── :8000` の窓口を通ります。
 
 ```bash
 curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
@@ -3080,7 +3080,515 @@ api を作り直すと、画像はどうなる？     → 消える（理由: /a
 **残った問い**: 画像は、api の箱を作り直すと消えてしまった。それに、worker の箱の中にも `/app/media` は無い（`docker compose exec worker ls /app/media` → `No such file or directory`。✅ 検証済み）。**画像を消えない倉庫に置き、しかも worker からも見えるようにするには、どうすればいいのか？**
 
 ---
-▶ **次**: P4-6d 画像の倉庫を作って worker と分け合う（まだ作っていません。P4-6c が終わったら作ります）
+▶ **次**: P4-6d 画像の倉庫を作って worker と分け合う
+
+---
+
+## P4-6d: 画像の倉庫を作って worker と分け合う
+
+**❓ この回の問い**: 前回（P4-6c）の答えは「画像は api の箱の中に置かれ、箱を作り直すと消える。worker の箱には `/app/media` すら無い」だった。
+→ **画像を消えない場所に置き、しかも worker からも見えるようにするには、どうすればいいのか？**
+
+**作ること / 確かめること**: 画像用の倉庫（volume）を1つ作り、api と worker の**両方**につなぐ。api を作り直しても画像が残ること、worker から同じ画像が見えることを確かめる
+**重要度**: 🔴 毎日使う — 「データは箱の外の倉庫に置く」「1つの倉庫を2つの箱で分け合う」は、Compose でよく出る形だから
+**前ステップとの接続**: P4-6c で api の中に作った `/app/media` を、倉庫につなぎ替える。`compose.yaml` だけを変える。コード（`.py`）は変えない
+
+**P4-6 ぜんたいの地図での位置**: ①④の準備（①で受け取った画像を、④で worker が読めるようにする）
+
+### 🔁 前回の思い出し
+
+**問い**: 画像を保存したとき、db（MySQL）の `image` 列に入ったのは、A と B のどちらでしたか？
+A. 画像そのもの　B. 置き場所を表す文字（`products/sample.jpg`）
+
+<details><summary>答え</summary>
+
+**B** です。db には置き場所の**文字だけ**が入り、画像そのものは `/app/media/products/` のファイルでした。だから P4-6c の 🧪 で api を作り直したとき、db には `products/sample.jpg` が**残ったのに**、ファイルは**消えて**、食い違いが起きました。今日はこの食い違いを直します。
+
+</details>
+
+### 🛠️ 先に自分で決める
+
+教材が答えを出す前に、**あなたが直し方を決めます。** このあとのチャンクは、あなたの選んだ方針の答え合わせとして進みます。
+
+**困りごと**（P4-6c の 🧪 と残った問いで見えたこと）
+
+1. api の箱を作り直すと、`/app/media` の画像が消える（db の文字は残るので、食い違う）
+2. worker の箱には `/app/media` が無い。これでは worker がサムネイルを作れない
+
+**🤔 どの直し方を選びますか？** 1つ選んで、理由を一言で書いてください（「分からない」でも大丈夫です）。
+
+| 案 | 直し方 |
+| --- | --- |
+| A | 何もしない。api の箱を作り直さないように気をつける |
+| B | **Mac のフォルダ**（例: `apps/api/media`）を、api と worker の `/app/media` に写す（bind mount。`src` と同じやり方） |
+| C | **画像用の倉庫**（named volume）を1つ作り、api と worker の `/app/media` につなぐ（db の `db-data` と同じやり方） |
+
+<details><summary>ヒント</summary>
+
+全体の地図（`docs/02-system-map.md`）の「③ 倉庫（volume）」の表を見てください。この EC には、もう**2種類の倉庫**があります。`src`（Mac のフォルダを写す）と `db-data`（名前付きの倉庫）です。画像は「**コード**」と「**データ**」のどちらに近いでしょう？
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+この教材は **C** で進めます。
+
+| 案 | 判定 | 理由 |
+| --- | --- | --- |
+| A | ✗ | 箱の作り直しは毎日起きる（`compose.yaml` を変えて `up` したとき、イメージを作り直したとき）。それに、困りごと2（worker から見えない）が直らない |
+| B | △ 動く | 実際に動きます。`.gitignore` に `media/` があるので、画像が git に入る心配もありません。ただ、**本番のサーバーには「Mac のフォルダ」がありません**。bind mount は「Mac で書いた**コード**をすぐ箱に写す」ための開発用の道具です |
+| C | ◎ | 送られてきた画像は、コードではなく、お客さんや管理者が作った**データ**です。db のデータを `db-data` に置いたのと同じ考え方で、Docker が管理する倉庫に置きます。開発でも本番でも同じ形で使えます |
+
+**B と C のどちらも「箱の外に置く」点は同じです。** 違うのは「どこに置くか」と「何のためか」です。B を選んだ人も、考え方の半分は合っています。
+
+</details>
+
+### 🐳 Docker の中の図（前）
+
+いま（P4-6d を始める前）の、箱の中の様子です。
+
+```text
+【道 back】 にいる箱（api は front にもいる）
+
+api の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                倉庫なし。箱の中だけ（作り直すと消える）
+
+worker の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                無い
+
+db の箱
+  /var/lib/mysql            ◀── 倉庫 db-data
+
+倉庫（named volume）: db-data
+```
+
+**見てほしいところ**: api の `/app/media` は、倉庫につながっていません。worker には `/app/media` そのものがありません。
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の地図に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+curl          ── :8000 どこからでも ──▶ api
+Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
+
+                                        【道 back】 api・worker・db・redis
+                                        api ──▶ db、redis
+DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消えない）
+Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
+                                                0番の部屋: カート / 1番の部屋: 受付箱
+（窓口なし）                            worker ──▶ redis の 1番を見張る
+                                        api・worker ──▶ 倉庫 media（画像）  ★ 今日: 新しい倉庫
+```
+
+**見てほしいところ**: 今日は**新しい倉庫を1つ**足して、api と worker につなぐだけです。新しい箱・道・窓口は増えません。
+
+### 🗺️ 今日の地図
+
+```text
+compose.yaml
+  │
+  ├── ① いちばん外の volumes: に、倉庫 media を宣言する   … チャンク1
+  │
+  ├── ② api の volumes: で、/app/media を倉庫 media につなぐ  … チャンク2
+  │
+  └── ③ worker の volumes: で、/app/media を同じ倉庫 media につなぐ … チャンク3
+```
+
+**見てほしいところ**: 書くのは `compose.yaml` だけで、**全部で3行**です。①で「倉庫を用意する」、②③で「その倉庫を箱につなぐ」。db の `db-data` も、同じ2段階で書いてあります（P4-2）。
+
+### 6d-0. このステップの初出
+
+**Docker**: `docker compose config --volumes`、`docker volume inspect`
+**Linux**: `mount`（何がどこにつながっているかを見るコマンド）
+**その他**: なし（named volume・bind mount は P4-2 と全体の地図（`docs/02-system-map.md`）で出た言葉）
+
+---
+
+### チャンク1: 画像用の倉庫を宣言する（`compose.yaml` のいちばん外の `volumes:`）— 地図の①
+
+**このチャンクの目的**: 「`media` という名前の倉庫を使います」と Compose に伝える。
+
+**🤔 先に考える**: いちばん外の `volumes:` に `media:` と書いて保存しただけで、**倉庫は本当にできる**と思いますか？
+A. できる　B. まだできない
+
+理由も一言で（「分からない」でも大丈夫です）。
+
+<details><summary>答え</summary>
+
+**B** です。宣言しただけでは、まだどの箱も使っていないので、Compose は倉庫を作りません。✅ 検証済み（2026-11-17）
+
+```bash
+docker compose config --volumes
+docker volume ls --filter name=roadmap-sh-docker
+```
+
+```text
+db-data
+roadmap-sh-docker_db-data
+```
+
+`media` はどちらにも出てきません。`docker compose config --volumes` は「**箱が使っている**倉庫の一覧」なので、宣言しただけの `media` は数に入りません。倉庫ができるのは、チャンク2 で箱につないで `up` したときです。
+
+</details>
+
+**🎯 書くもの**: `compose.yaml` のいちばん下のほうにある、いちばん外の `volumes:` の中に、`db-data:` と並べて `media:` を1行足す。
+
+**✍️ 自分で書く**（P4-2 で `db-data:` を書いたので、日本語だけで書きます）
+
+<details><summary>ヒント1: どこに書く？</summary>
+
+`services:` と同じ深さ（左端）にある `volumes:` です。その下の `db-data:` と、左端をそろえます。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ volumes:
+     db-data:
++    media:
+ 
+ networks:
+```
+
+</details>
+
+**▶️ 確かめる**: 書き方が正しいかだけを見ます。
+
+```bash
+docker compose config --quiet
+```
+
+何も出なければ OK です。✅ 検証済み（2026-11-17）
+
+**🔎 答えの見つけ方**: 「倉庫がちゃんと箱に使われているか」は `docker compose config --volumes`。「Docker の中に倉庫が本当にできたか」は `docker volume ls`。この2つは**別のもの**を見ています。
+
+**🔬 1行ずつ分解**:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| いちばん外の `volumes:` | ボリュームズ（top-level volumes） | この `compose.yaml` で使う**倉庫の名簿** | — |
+| `media:` | メディア | 名簿に `media` という倉庫を載せる。`:` の後ろが空なのは「設定は全部おまかせ」という意味 | 消すと、チャンク2・3 で `media` を使ったときにエラー（🧪 で確かめる） |
+
+**📖 しくみ**
+
+- **何をしているか**: `media` という名前の倉庫を、名簿に載せました。
+- **なぜ必要か**: 箱の `volumes:` で `media` と書いたとき、それが「名前付きの倉庫」なのか「書き間違い」なのかを、Compose が名簿で確かめるためです。
+- **どういう原理で動くか**: `docker compose up` のとき、**Compose** は名簿を読み、**どれかの箱が使っている倉庫だけ**を作ります。名前の頭には、フォルダ名から決まる**プロジェクト名**（project name、つまり「この Compose のまとまりの名前」）が付きます。だから本物の名前は `roadmap-sh-docker_media` になります。`db-data` が `roadmap-sh-docker_db-data` なのと同じです。
+
+---
+
+### チャンク2: api の画像置き場を倉庫につなぐ（`compose.yaml` の `api`）— 地図の②
+
+**このチャンクの目的**: api の `/app/media` を、箱の中ではなく倉庫 `media` に置くようにする。
+
+**🤔 先に考える**: これから api の `volumes:` に `- media:/app/media` を足します。すぐ上には `- ./apps/api/src:/app/src` があります。**`media:/app/media` の中で、Mac の場所を指しているのはどこ**だと思いますか？
+A. 左の `media`　B. 右の `/app/media`　C. どちらも Mac ではない
+
+<details><summary>答え</summary>
+
+**C** です。左の `media` は**倉庫の名前**、右の `/app/media` は**箱の中の場所**です。
+
+`./apps/api/src:/app/src` のほうは、左が `./` で始まっています。**`./` や `/` で始まると Mac のフォルダ**（bind mount）、**名前だけなら倉庫**（named volume）と、Compose は左側の書き方で見分けます。
+
+</details>
+
+**🎯 書くもの**: `api` の `volumes:` の、`- ./apps/api/src:/app/src` の**すぐ下**に1行足す。倉庫 `media` を、箱の中の `/app/media` につなぐ。
+
+**✍️ 自分で書く**（`db` の `- db-data:/var/lib/mysql` と同じ形の2回目なので、穴埋めです）
+
+```yaml
+        volumes:
+            - ./apps/api/src:/app/src
+            - ___:/app/___
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+         volumes:
+             - ./apps/api/src:/app/src
++            - media:/app/media
+         networks:
+             - front
+```
+
+</details>
+
+**▶️ 確かめる**: api を作り直して、もう一度画像を送ります。そのあと、**わざと api を作り直して**、画像が残るかを見ます。
+
+```bash
+docker compose up -d api
+docker compose config --volumes
+docker volume ls --filter name=roadmap-sh-docker
+```
+
+```text
+db-data
+media
+roadmap-sh-docker_db-data
+roadmap-sh-docker_media
+```
+
+今度は `media` が両方に出ました。箱につないだので、Compose が倉庫を作りました。
+
+> ⚠️ P4-6c で `DEBUGPY=1` を付けて api を起動していた場合、`docker compose up -d api` で**ふつうの起動に戻ります**（デバッガはつながらなくなります）。デバッグしたいときは、`DEBUGPY=1 docker compose up -d api` で起動し直してください。
+
+画像を送ります。`/tmp/sample.jpg` が無ければ、P4-6c チャンク3 の ▶️ のコマンドで作り直します。
+
+```bash
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+docker compose exec api ls /app/media/products/
+docker compose up -d --force-recreate api
+docker compose exec api ls /app/media/products/
+```
+
+```text
+{"status": "saved"}
+sample.jpg
+ Container roadmap-sh-docker-api-1 Started
+sample.jpg
+```
+
+✅ 検証済み: 2026-11-17。手元と同じファイルを別の場所に写して確認した（プロジェクト名は `p46d`、イメージ名は `ec-api:p46d`。`curl` は Mac からではなく、front の道の中から api に送った）
+
+**作り直したあとも `sample.jpg` が残りました。** P4-6c の 🧪 では消えていた画像です。
+
+**🔎 答えの見つけ方**: 「箱の中のこの場所は、何につながっているか」は、箱の中で `mount` を打つと分かります。
+
+```bash
+docker compose exec api sh -c 'mount | grep /app/'
+```
+
+```text
+virtiofs0 on /app/src type virtiofs (rw,nosuid,nodev,relatime,ignore_atime,no_xattr)
+/dev/vda1 on /app/media type ext4 (rw,relatime,discard)
+```
+
+✅ 検証済み: 2026-11-17
+
+`/app/src` は `virtiofs`（**Mac のフォルダを写す道**）、`/app/media` は `ext4`（**Docker の中のディスク**）です。2つは、つながっている先がまったく違います。
+
+**🔬 1行ずつ分解**:
+
+`- media:/app/media`
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `-` | ハイフン（リストの1項目） | `volumes:` の中の1つ | — |
+| `media` | 倉庫の名前（volume name） | チャンク1 で名簿に載せた倉庫。**名前だけ**なので named volume | `./media` と書くと、Mac のフォルダ（bind mount）の意味に変わる |
+| `:` | コロン（区切り） | 左が「何を」、右が「箱のどこに」 | — |
+| `/app/media` | 箱の中の場所（container path） | `settings.py` の `MEDIA_ROOT`（P4-6c）と同じ場所 | `MEDIA_ROOT` と違う場所にすると、画像は倉庫に入らず、また箱の中に置かれる |
+
+**📖 しくみ**
+
+- **何をしているか**: api の箱の `/app/media` を、倉庫 `media` の**入口**にしました。
+- **なぜ必要か**: 箱は作り直すと、中身が最初の状態に戻ります。倉庫は箱の外にあるので、箱を作り直しても残ります。db の `db-data` と同じ理由です。
+- **どういう原理で動くか**:
+  1. `docker compose up` のとき、**Compose** が倉庫 `roadmap-sh-docker_media` を作る（無ければ）
+  2. **Docker** が api の箱を作り、箱の中の `/app/media` に倉庫を**取り付ける**（mount、つまり「その場所を開けると倉庫の中身が見えるようにする」こと）
+  3. **Django** が画像を `/app/media/products/` に書くと、実際には倉庫の中に書かれる
+  4. 箱を作り直しても、新しい箱に**同じ倉庫**がまた取り付けられるので、中身が見える
+
+> 📇 **named volume（名前付きボリューム）** — 正式名称: **named volume**
+> かみくだくと: Docker が管理する、名前の付いた**箱の外の倉庫**。
+> 似た言葉との違い: bind mount = **Mac のフォルダ**をそのまま写す。named volume = **Docker の中**に倉庫を作る。
+> この教材では: `db-data`（db 用）と `media`（画像用）。
+
+---
+
+### チャンク3: worker にも同じ倉庫をつなぐ（`compose.yaml` の `worker`）— 地図の③
+
+**このチャンクの目的**: worker が、api の保存した画像を読めるようにする。
+
+**🤔 先に考える**: worker に同じ1行を足して起動し直したら、worker の `/app/media/products/` に `sample.jpg` は見えると思いますか？ **worker には、まだ一度も画像を送っていません。**
+A. 見える　B. 見えない
+
+<details><summary>答え</summary>
+
+**A** です。worker は、api と**同じ倉庫**につながります。api がチャンク2 で倉庫に置いた `sample.jpg` が、そのまま見えます。倉庫は箱のものではなく、**つないだ箱みんなで分け合う**ものです。
+
+</details>
+
+**🎯 書くもの**: `worker` の `volumes:` の、`- ./apps/api/src:/app/src` の**すぐ下**に、api と同じ倉庫を同じ場所につなぐ1行を足す。
+
+**✍️ 自分で書く**（チャンク2 で書いたばかりの形なので、日本語だけで書きます）
+
+<details><summary>ヒント1</summary>
+
+チャンク2 の分解表を見て、「倉庫の名前」と「箱の中の場所」を思い出します。worker の `MEDIA_ROOT` も、api と同じ `/app/media` です（同じ `settings.py` を使っているから）。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+         volumes:
+             - ./apps/api/src:/app/src
++            - media:/app/media
+         networks:
+             - back
+```
+
+</details>
+
+**▶️ 確かめる**:
+
+```bash
+docker compose up -d worker
+docker compose exec worker ls /app/media/products/
+```
+
+```text
+sample.jpg
+```
+
+✅ 検証済み: 2026-11-17（チャンク2 と同じ確かめ方）
+
+P4-6c の終わりでは `No such file or directory` だった worker から、api が保存した画像が見えました。
+
+**🔎 答えの見つけ方**: 「この倉庫は、Docker の中のどこにあるか」は `docker volume inspect` で分かります。
+
+```bash
+docker volume inspect roadmap-sh-docker_media --format '{{.Mountpoint}}'
+ls /var/lib/docker
+```
+
+```text
+/var/lib/docker/volumes/roadmap-sh-docker_media/_data
+ls: /var/lib/docker: No such file or directory
+```
+
+✅ 検証済み: 2026-11-17（プロジェクト名 `p46d` で確認した）
+
+1行目の場所は、**Mac には無い**場所です（2行目で Mac で探すと「無い」）。Docker Desktop は、Mac の中で**小さな Linux**（仮想マシン、P0 で出た言葉）を動かしています。倉庫は、その Linux のディスクの中にあります。チャンク2 の `mount` で `/dev/vda1`（Linux のディスク）と出たのは、このためです。
+
+**🔬 1行ずつ分解**: チャンク2 と同じ1行です（`- media:/app/media`）。違うのは、**書いた箱**が worker であることだけです。
+
+**📖 しくみ**
+
+- **何をしているか**: 1つの倉庫 `media` を、api と worker の**2つの箱**に取り付けました。
+- **なぜ必要か**: api が受け取った画像を、worker が読んでサムネイルを作るからです（P4-6f）。worker から画像が見えなければ、仕事ができません。
+- **どういう原理で動くか**: **Docker** は、同じ倉庫を何個の箱にでも取り付けられます。api が `/app/media/products/sample.jpg` に書くと、倉庫の中にファイルができます。worker が `/app/media/products/` を開くと、**同じ倉庫の中**を見ているので、そのファイルが見えます。コピーしているのではなく、**同じ場所を2つの入口から見ている**だけです。
+
+---
+
+### 🧪 壊してみる
+
+チャンク1 で書いた名簿の `media:` を外すと、どうなるでしょう。
+
+1. **予想**: いちばん外の `volumes:` から `media:` の1行だけを消して `docker compose config --quiet` を打つと、どうなると思いますか？
+   A. 何も出ない（OK）　B. エラーになる
+2. **実行**: `media:` の行を消して保存し、打ちます。
+
+   ```bash
+   docker compose config --quiet
+   ```
+
+3. **見る**:
+
+   ```text
+   service "api" refers to undefined volume media: invalid compose project
+   ```
+
+   ✅ 検証済み: 2026-11-17（打つたびに `"api"` と `"worker"` のどちらかが出る。どちらも同じ意味）
+
+   部品に分けて読みます。
+
+   | 部品 | 意味 |
+   | --- | --- |
+   | `service "api"` | api の箱の設定で |
+   | `refers to undefined volume media` | **名簿に無い**倉庫 `media` を使おうとしている |
+   | `invalid compose project` | だから、この `compose.yaml` は正しくない |
+
+   箱の `volumes:` で `media` と名前だけを書くと、Compose は「名前付きの倉庫だな」と考えて、名簿（いちばん外の `volumes:`）を探します。名簿に無いので、書き間違いかもしれないと止めてくれました。チャンク1 の分解表の「無いとどうなる」と同じです。
+
+4. **元に戻す**: `media:` を戻して保存し、`docker compose config --quiet` で何も出ないことを確かめます。
+
+### 🐳 Docker の中の図（後）
+
+P4-6d が終わったときの、箱の中の様子です。★ が今日変わった所です。
+
+```text
+【道 back】 にいる箱（api は front にもいる）
+
+api の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                ◀── 倉庫 media  ★
+                                │ 同じ倉庫を2つの箱でつなぐ
+worker の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                ◀── 倉庫 media  ★
+
+db の箱
+  /var/lib/mysql            ◀── 倉庫 db-data
+
+倉庫（named volume）: db-data、media ★
+```
+
+**見てほしいところ**: 冒頭の「前」の図と並べてください。変わったのは ★ の3か所だけです。api の `/app/media` と worker の `/app/media` が、**同じ倉庫 `media`** を見ています。
+
+> 🗺️ 全体の地図（`docs/02-system-map.md`）にも、倉庫 `media` を書き足しました。
+
+### ✏️ 自分で地図を描く
+
+上の「後」の図を**見ずに**、`＿＿＿` を埋めてみてください。
+
+```text
+api の箱
+  /app/src                  ◀── Mac の apps/api/src（＿＿＿＿＿＿）
+  /app/media                ◀── 倉庫 ＿＿＿＿＿
+                                │ 同じ倉庫を2つの箱でつなぐ
+worker の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/＿＿＿＿＿           ◀── 倉庫 ＿＿＿＿＿
+
+倉庫を書く場所 1: いちばん外の ＿＿＿＿＿＿: の下（宣言）
+倉庫を書く場所 2: 箱の volumes: の下（＿＿＿＿＿＿＿＿＿ の形でつなぐ）
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+api の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                ◀── 倉庫 media
+                                │ 同じ倉庫を2つの箱でつなぐ
+worker の箱
+  /app/src                  ◀── Mac の apps/api/src（bind mount）
+  /app/media                ◀── 倉庫 media
+
+倉庫を書く場所 1: いちばん外の volumes: の下（宣言）
+倉庫を書く場所 2: 箱の volumes: の下（倉庫の名前:箱の中の場所 の形でつなぐ）
+```
+
+埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「倉庫は箱ごとにあると思っていたけど、実は1つの倉庫を2つの箱で分け合えた」
+
+### ✅ できるようになったこと
+
+- [ ] 画像を「Mac のフォルダ」ではなく「名前付きの倉庫」に置く理由を、コードとデータの違いで説明できる
+- [ ] `media:/app/media` と `./apps/api/src:/app/src` を見て、どちらが倉庫でどちらが Mac のフォルダかを言える
+- [ ] api を作り直しても画像が残ること、worker から同じ画像が見えることを、打つ前に予想できる
+
+**残った問い**: worker から画像が見えるようになった。でも worker は、**いつ**サムネイルを作ればいいのかを知らない。画像が届いたことを、api はどうやって worker に伝えるのか？ P4-6a で作った**受付箱**の出番だ。
+
+---
+▶ **次**: P4-6e メモを受付箱に入れ、worker に届ける（まだ作っていません。P4-6d が終わったら作ります）
 
 ---
 

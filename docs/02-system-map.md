@@ -19,6 +19,7 @@ DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消
 Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
                                                 0番の部屋: カート / 1番の部屋: 受付箱
 （窓口なし）                            worker ──▶ redis の 1番を見張る
+                                        api・worker ──▶ 倉庫 media（画像。消えない。P4-6d で追加）
 ```
 
 **読み方**: 左が Mac の道具、まん中が窓口（④）、右が Docker の中の箱（①）。Mac からは窓口を通って箱に入る。箱どうしは、同じ道（②）にいる相手とだけ話せる。api と worker のコードは、Mac の `apps/api/src` を写して使っている（③ bind mount）。
@@ -50,6 +51,7 @@ Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作�
 | --- | --- | --- | --- |
 | Mac のフォルダを写す | bind mount | api・worker の `src` | Mac にあるので残る |
 | 名前付きの倉庫 | named volume | db の `db-data` | 残る |
+| 名前付きの倉庫 | named volume | api・worker の `media`（`/app/media`。2つの箱で分け合う。P4-6d で追加） | 残る |
 | なし | — | redis | **消える**（2026-11-15 に `cart:test` で確かめた） |
 
 ### ④ 窓口（ポート）
@@ -76,6 +78,8 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | 箱に何が渡ったか（環境変数・設定） | `docker compose config <サービス名>` |
 | どの箱がどの道にいるか | `docker network inspect roadmap-sh-docker_<道の名前>` |
 | 名前付きの倉庫の一覧 | `docker volume ls` |
+| 箱が使っている倉庫の一覧 | `docker compose config --volumes`（宣言だけで使っていない倉庫は出ない） |
+| 箱の中のこの場所が何につながっているか | `docker compose exec <サービス名> sh -c 'mount \| grep /app/'`（`virtiofs` = Mac のフォルダ、`ext4` = 倉庫） |
 | どこから入れるか（窓口） | `docker compose ps --format '{{.Service}}  {{.Ports}}'` |
 | `compose.yaml` の書き方が正しいか | `docker compose config --quiet`（何も出なければ OK） |
 
