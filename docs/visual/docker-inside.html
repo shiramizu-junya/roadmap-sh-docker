@@ -1,0 +1,475 @@
+<title>EC の Docker の中</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;500;700;900&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* レイアウト: 上にステップの切り替え、左に Docker の中の図、右に選んだ部品の説明。下に成長の記録と調べ方の地図 */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #18212f;
+  --muted: #5b6678;
+  --line: #d5dbe4;
+  --front: #0f8b8d;
+  --front-tint: rgba(15, 139, 141, 0.08);
+  --back: #4a55b5;
+  --back-tint: rgba(74, 85, 181, 0.07);
+  --store: #b7791f;
+  --store-tint: rgba(183, 121, 31, 0.12);
+  --mac: #6b7280;
+  --hot: #e2553d;
+  --hot-tint: rgba(226, 85, 61, 0.14);
+  --ok: #2f855a;
+  --box: #ffffff;
+  --code-bg: #eef1f6;
+  --font-body: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-code: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #121722; --surface: #1a2130; --ink: #e8ecf3; --muted: #9aa5b8; --line: #2e3850;
+    --front: #3cc3c5; --front-tint: rgba(60, 195, 197, 0.10);
+    --back: #8d97f0; --back-tint: rgba(141, 151, 240, 0.09);
+    --store: #e3a94a; --store-tint: rgba(227, 169, 74, 0.14);
+    --mac: #a0a8b6; --hot: #ff7a5f; --hot-tint: rgba(255, 122, 95, 0.18);
+    --ok: #5fcf93; --box: #202938; --code-bg: #232c3d;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #121722; --surface: #1a2130; --ink: #e8ecf3; --muted: #9aa5b8; --line: #2e3850;
+  --front: #3cc3c5; --front-tint: rgba(60, 195, 197, 0.10);
+  --back: #8d97f0; --back-tint: rgba(141, 151, 240, 0.09);
+  --store: #e3a94a; --store-tint: rgba(227, 169, 74, 0.14);
+  --mac: #a0a8b6; --hot: #ff7a5f; --hot-tint: rgba(255, 122, 95, 0.18);
+  --ok: #5fcf93; --box: #202938; --code-bg: #232c3d;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body);
+  font-size: 15px; line-height: 1.7;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 48px;
+}
+.wrap { max-width: 1240px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: grid; gap: 6px; }
+h1 { font-size: 1.6rem; font-weight: 900; margin: 0; letter-spacing: 0.02em; text-wrap: balance; }
+.lead { color: var(--muted); margin: 0; max-width: 62ch; }
+code, .code { font-family: var(--font-code); font-size: 0.86em; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+
+.steps { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.steps button {
+  flex: 0 0 auto; font: inherit; font-size: 0.9rem; cursor: pointer;
+  border: 1px solid var(--line); background: var(--surface); color: var(--ink);
+  border-radius: 999px; padding: 6px 14px; display: flex; gap: 8px; align-items: center;
+}
+.steps button .tag { font-family: var(--font-code); font-weight: 600; }
+.steps button[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.steps button.future { color: var(--muted); border-style: dashed; cursor: default; }
+.steps button:focus-visible, .legend button:focus-visible { outline: 3px solid var(--hot); outline-offset: 2px; }
+
+.main { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 20px; align-items: start; }
+@media (max-width: 980px) { .main { grid-template-columns: minmax(0, 1fr); } }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px; min-width: 0; }
+.diagram { overflow-x: auto; padding: 8px; }
+.diagram svg { display: block; width: 100%; min-width: 760px; height: auto; }
+.question { font-weight: 700; margin: 0 0 4px; }
+.changes { margin: 6px 0 0; padding-left: 1.2em; }
+.changes li::marker { color: var(--hot); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 8px 14px; font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+
+.side h2, section h2 { font-size: 1.1rem; margin: 0 0 8px; }
+.side .kind { font-size: 0.8rem; color: var(--muted); letter-spacing: 0.06em; }
+.side dl { margin: 10px 0 0; display: grid; gap: 8px; }
+.side dt { font-size: 0.8rem; color: var(--muted); }
+.side dd { margin: 0; }
+.cmd { display: block; font-family: var(--font-code); font-size: 0.82rem; background: var(--code-bg); padding: 8px 10px; border-radius: 6px; overflow-x: auto; white-space: pre; }
+.hint { font-size: 0.85rem; color: var(--muted); margin-top: 12px; }
+
+/* SVG */
+.net-front { fill: var(--front-tint); stroke: var(--front); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.net-back { fill: var(--back-tint); stroke: var(--back); stroke-width: 1.5; stroke-dasharray: 6 4; }
+.net-label-front { fill: var(--front); font-weight: 700; font-size: 14px; }
+.net-label-back { fill: var(--back); font-weight: 700; font-size: 14px; }
+.docker-frame { fill: none; stroke: var(--line); stroke-width: 2; }
+.region-label { fill: var(--muted); font-size: 13px; font-weight: 700; letter-spacing: 0.08em; }
+.box rect.body { fill: var(--box); stroke: var(--ink); stroke-width: 1.4; }
+.box .title { fill: var(--ink); font-weight: 900; font-size: 16px; }
+.box .sub { fill: var(--muted); font-size: 11.5px; font-family: var(--font-code); }
+.box .badge { fill: var(--ink); font-size: 12px; }
+.box .badge.code { font-family: var(--font-code); font-size: 11.5px; }
+.dot-src { fill: var(--mac); } .dot-store { fill: var(--store); } .dot-warn { fill: var(--hot); } .dot-conf { fill: var(--back); }
+.chip rect { fill: var(--surface); stroke: var(--mac); stroke-width: 1.2; }
+.chip text { fill: var(--ink); font-size: 13px; }
+.chip.folder rect { stroke-dasharray: 4 3; }
+.wire { fill: none; stroke: var(--mac); stroke-width: 1.4; }
+.wire.app { stroke: var(--ink); stroke-width: 1.6; }
+.wire.watch { stroke: var(--back); stroke-width: 1.8; stroke-dasharray: 2 4; }
+.wire.mount { stroke: var(--mac); stroke-dasharray: 5 4; }
+.wire.vol { stroke: var(--store); stroke-width: 2; }
+.port { fill: var(--muted); font-size: 11.5px; font-family: var(--font-code); }
+.port-bg { fill: var(--bg); }
+.store rect { fill: var(--store-tint); stroke: var(--store); stroke-width: 1.6; }
+.store.none rect { fill: none; stroke: var(--muted); stroke-dasharray: 4 4; }
+.store text { fill: var(--ink); font-size: 13px; font-weight: 700; }
+.store .sub { fill: var(--muted); font-size: 11.5px; font-weight: 400; }
+.clickable { cursor: pointer; }
+.clickable:focus { outline: none; }
+.clickable:focus-visible rect, .clickable:hover rect { stroke-width: 2.6; }
+.sel rect.body, .sel.store rect, .sel.chip rect { stroke: var(--hot) !important; stroke-width: 2.8; }
+.hl rect.body, .hl.store rect, .hl.chip rect { stroke: var(--hot); stroke-width: 2.6; }
+.hl .glow { fill: var(--hot-tint); }
+.wire.hl { stroke: var(--hot); }
+.hl-text { fill: var(--hot) !important; font-weight: 700; }
+@keyframes pulse { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }
+.glow { fill: transparent; animation: pulse 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .glow { animation: none; opacity: 0.7; } }
+
+/* 成長の記録 */
+.growth { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; min-width: 0; display: grid; gap: 6px; align-content: start; }
+.card h3 { margin: 0; font-size: 1rem; }
+.card .when { font-size: 0.8rem; color: var(--muted); font-family: var(--font-code); }
+.card ul { margin: 0; padding-left: 1.1em; }
+.card li::marker { content: "✓  "; color: var(--ok); }
+.card blockquote { margin: 4px 0 0; padding: 6px 10px; border-left: 3px solid var(--store); background: var(--store-tint); border-radius: 0 6px 6px 0; font-size: 0.92rem; }
+.card.next { border-style: dashed; color: var(--muted); }
+.stats { display: flex; flex-wrap: wrap; gap: 10px 24px; margin-bottom: 12px; }
+.stats div { display: grid; }
+.stats b { font-size: 1.5rem; font-variant-numeric: tabular-nums; }
+.stats span { font-size: 0.82rem; color: var(--muted); }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 0.9rem; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { font-size: 0.8rem; color: var(--muted); font-weight: 500; }
+td.step { font-family: var(--font-code); white-space: nowrap; color: var(--muted); }
+tr.new td { background: var(--hot-tint); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>EC の Docker の中</h1>
+    <p class="lead">P4-6 で作っている EC が、いま Docker の中でどうなっているかの図です。上のボタンでステップを切り替えると、その時点の図に変わり、<b>そのステップで変わった所が赤く光ります</b>。図の箱や倉庫をクリックすると、右に説明が出ます。</p>
+  </header>
+
+  <nav class="steps" id="steps" aria-label="ステップの切り替え"></nav>
+
+  <div class="main">
+    <div class="panel" style="display:grid; gap:10px;">
+      <div>
+        <p class="question" id="q"></p>
+        <ul class="changes" id="changes"></ul>
+      </div>
+      <div class="diagram" id="diagram" role="img" aria-label="Docker の中の図"></div>
+      <div class="legend">
+        <span><i class="sw" style="background:var(--front-tint);outline:1.5px dashed var(--front)"></i>道 front</span>
+        <span><i class="sw" style="background:var(--back-tint);outline:1.5px dashed var(--back)"></i>道 back</span>
+        <span><i class="sw" style="background:var(--store-tint);outline:1.5px solid var(--store)"></i>倉庫（named volume）</span>
+        <span><i class="sw" style="outline:1.5px dashed var(--mac)"></i>Mac のフォルダを写す（bind mount）</span>
+        <span><i class="sw" style="background:var(--hot-tint);outline:2px solid var(--hot)"></i>このステップで変わった所</span>
+      </div>
+    </div>
+    <aside class="panel side" id="side" aria-live="polite"></aside>
+  </div>
+
+  <section>
+    <h2>成長の記録</h2>
+    <div class="stats" id="stats"></div>
+    <div class="growth" id="growth"></div>
+  </section>
+
+  <section class="panel">
+    <h2>🔎 調べ方の地図</h2>
+    <p class="lead" style="margin-bottom:8px">分からなくなったら、ここを見ます。選んでいるステップで増えた行は赤く塗られています。</p>
+    <div class="table-wrap"><table id="lookup"><thead><tr><th>知りたいこと</th><th>打つもの</th><th>覚えた回</th></tr></thead><tbody></tbody></table></div>
+  </section>
+</div>
+
+<script>
+const STEPS = [
+  { id: "p4-5", tag: "P4-5", title: "Redis でカートを作る",
+    q: "設定を compose.yaml の外に出せないのか？",
+    changes: ["redis の箱を足し、カートを 0番の部屋に置いた", "api の設定を apps/api/.env に出した"],
+    hl: ["redis", "w-api-redis", "room0"] },
+  { id: "p4-6a", tag: "6a", title: "受付箱の場所を Celery に教える",
+    q: "重い仕事を頼む「受付箱」の場所も、.env で渡せるのか？",
+    changes: ["Redis の 1番の部屋を受付箱にした", "BROKER_URL が .env → settings.py → celery.py の順に届く"],
+    hl: ["room1", "api-broker"] },
+  { id: "p4-6b", tag: "6b", title: "worker コンテナを起動する",
+    q: "worker は、どのイメージから作ればいいのか？",
+    changes: ["worker の箱を足した（api と同じイメージ ec-api:dev）", "command: で起動命令を celery worker に置き換えた", "worker は back の道で 1番の部屋を見張る"],
+    hl: ["worker", "w-src-worker", "w-watch", "api-image"] },
+  { id: "p4-6c", tag: "6c", title: "画像を受け取って保存する",
+    q: "送られてきた画像を、api はどこに保存すればいいのか？",
+    changes: ["api に画像を受け取る窓口 POST /api/products/{id}/image を作った", "画像は api の箱の中の /app/media に置いた（倉庫なし）", "db の image 列には、画像ではなくパス（文字）が入る"],
+    hl: ["api-endpoint", "api-media", "db-col"] },
+  { id: "p4-6d", tag: "6d", title: "画像の倉庫を作って worker と分け合う",
+    q: "画像を消えない倉庫に置き、worker からも見えるようにするには？",
+    changes: ["倉庫 media を作った（あなたが C を選んだ）", "api と worker の両方の /app/media につないだ", "api の箱を作り直しても、画像が消えなくなった"],
+    hl: ["media", "w-api-media", "w-worker-media", "api-media", "worker-media"] },
+];
+const FUTURE = [
+  { tag: "6e", title: "メモを受付箱に入れる" },
+  { tag: "6f", title: "サムネイルを作る" },
+  { tag: "6g", title: "画面に出す" },
+  { tag: "6h", title: "止めるとき待たせる" },
+];
+
+const INFO = {
+  web: { kind: "箱（コンテナ）", name: "web", formal: "service / container", plain: "画面の係。ブラウザに React の画面を見せる。", detail: "道は front だけ。db や redis へは、必ず api を通る。", cmd: "docker compose logs web" },
+  api: { kind: "箱（コンテナ）", name: "api", formal: "service / container（Django + Django Ninja）", plain: "窓口。アプリのコードがあり、画面や curl からの頼みを受ける。", detail: "front と back の両方の道にいる、ただ1つの箱。起動命令はイメージの CMD（runserver）のまま。", cmd: "docker compose logs --since 1m api" },
+  worker: { kind: "箱（コンテナ）", name: "worker", formal: "Celery worker", plain: "裏方。受付箱（Redis の 1番の部屋）を見張り、仕事のメモが来たら仕事をする。", detail: "api と同じイメージ ec-api:dev。command: で起動命令を celery worker に置き換えている。窓口（ports）は無い。", cmd: "docker compose logs worker" },
+  db: { kind: "箱（コンテナ）", name: "db", formal: "MySQL 8.4（RDBMS: リレーショナルデータベース）", plain: "消えたら困るデータ（商品）を、ディスクにずっと取っておく。", detail: "2秒ごとにヘルスチェック（mysqladmin ping）を受けている。6c から、商品の image 列に画像のパス（文字）が入る。", cmd: "docker compose exec db mysql -uec -pec-pass ec" },
+  redis: { kind: "箱（コンテナ）", name: "redis", formal: "Redis（in-memory data store）", plain: "すぐ変わるデータを、メモリで速く出し入れする置き場。", detail: "中は 0〜15番の部屋（logical database）に分かれている。0番 = カート、1番 = 受付箱。倉庫が無いので、箱を作り直すと中身は消える。", cmd: "docker compose exec redis redis-cli -n 1 KEYS '*'" },
+  front: { kind: "道（ネットワーク）", name: "front", formal: "network", plain: "画面（web）と窓口（api）が話す道。", detail: "同じ道にいる箱どうしだけが、サービス名で呼び合える（名前解決 / DNS）。", cmd: "docker network inspect roadmap-sh-docker_front --format '{{range .Containers}}{{.Name}} {{end}}'" },
+  back: { kind: "道（ネットワーク）", name: "back", formal: "network", plain: "裏側の道。api・worker・db・redis がいる。", detail: "web は入れない。話す必要のない箱どうしをつながないようにする考え方を、ネットワーク分離（network segmentation）と呼ぶ。", cmd: "docker network inspect roadmap-sh-docker_back --format '{{range .Containers}}{{.Name}} {{end}}'" },
+  "db-data": { kind: "倉庫", name: "db-data", formal: "named volume（名前付きボリューム）", plain: "db のデータを置く倉庫。箱を消しても残る。", detail: "db の /var/lib/mysql につながっている。", cmd: "docker volume ls --filter name=roadmap-sh-docker" },
+  media: { kind: "倉庫", name: "media", formal: "named volume（名前付きボリューム）", plain: "画像を置く倉庫。api と worker の両方の /app/media につながっている。", detail: "画像はコードではなくデータなので、Mac のフォルダではなく倉庫に置く。本番のサーバーにも Mac は無い。", cmd: "docker compose exec api sh -c 'mount | grep /app/'" },
+  "redis-none": { kind: "倉庫", name: "（redis には倉庫なし）", formal: "—", plain: "redis の中身は箱の中にしか無い。", detail: "11/15 に cart:test を入れてから箱を作り直し、消えることを確かめた。", cmd: "docker compose exec redis redis-cli -n 0 KEYS '*'" },
+  src: { kind: "Mac のフォルダ", name: "apps/api/src", formal: "bind mount（バインドマウント）", plain: "Mac で書いたコードを、そのまま箱の中の /app/src に見せる。", detail: "api と worker の両方に写している。コードは「人が Mac で書くもの」なので、倉庫ではなく Mac のフォルダを写す。", cmd: "docker compose exec api sh -c 'mount | grep /app/src'" },
+  ports: { kind: "窓口（ポート）", name: "ports", formal: "port publishing（ポート公開）", plain: "Mac の番号と、箱の中の番号をつなぐ入り口。", detail: "127.0.0.1 は「この Mac からだけ」、0.0.0.0 は「どこからでも（同じ Wi-Fi の他のパソコンからも）」。", cmd: "docker compose ps --format '{{.Service}}  {{.Ports}}'" },
+};
+
+const GROWTH = [
+  { tag: "6a", title: "受付箱の場所を Celery に教える", when: "11/14",
+    can: ["値が .env → settings.py → celery.py の順に届くことを、地図で説明できる", "namespace=\"CELERY\" の意味を説明できる", "config_from_object を消すと None になる理由を言える"],
+    note: "設定は1か所にまとめていると思っていたけど、実は環境ごとに替えるためだった" },
+  { tag: "6b", title: "worker コンテナを起動する", when: "11/15",
+    can: ["build: と一緒の image: は「作ったものに付ける名前」だと説明できる", "worker に要る設定を、理由つきで選べる", "networks: を外すと Name or service not known になる理由を言える"],
+    note: "イメージは1つにまとめるためだと思っていたけど、実は版のずれを防ぐためだった" },
+  { tag: "地図", title: "EC 全体の地図を描く", when: "11/15",
+    can: ["5つの箱の係を、見ずに言える", "どの箱がどの道にいるかを、予想して当てられる", "倉庫が無い箱を作り直すとデータが消えることを、実験で確かめられる"],
+    note: "全体像は頭にあると思っていたけど、実は描いてみないと分からなかった" },
+  { tag: "6c", title: "画像を受け取って保存する", when: "11/17",
+    can: ["画像を保存したとき、ファイルと db にそれぞれ何が入るかを説明できる", "MEDIA_ROOT と upload_to から、ファイルの置き場所を組み立てられる", "api の箱を作り直したら画像がどうなるかを、打つ前に予想できる"] },
+  { tag: "6d", title: "画像の倉庫を作って worker と分け合う", when: "11/18",
+    can: ["画像を Mac のフォルダではなく倉庫に置く理由を、コードとデータの違いで説明できる", "bind mount と named volume を、見た目で見分けられる", "直し方を、教材の答えを見る前に自分で選べた（C）"] },
+];
+
+const LOOKUP = [
+  ["compose.yaml の書き方が正しいか", "docker compose config --quiet", "p4-5"],
+  ["箱に何が渡ったか（環境変数・設定）", "docker compose config <サービス名>", "p4-5"],
+  ["Redis の部屋の中身", "docker compose exec redis redis-cli -n 1 KEYS '*'", "p4-6a"],
+  ["Django の設定が読めているか", "docker compose run --rm api .venv/bin/python src/manage.py shell -c \"...\"", "p4-6a"],
+  ["箱が動いているか", "docker compose ps", "p4-6b"],
+  ["箱が止まった・つながらない理由", "docker compose logs <サービス名>（ERROR の行）", "p4-6b"],
+  ["新しいログだけ見る", "docker compose logs -f --since 1m <サービス名>", "p4-6b"],
+  ["どの箱がどの道にいるか", "docker network inspect roadmap-sh-docker_<道>", "p4-6b"],
+  ["どこから入れるか（窓口）", "docker compose ps --format '{{.Service}}  {{.Ports}}'", "p4-6b"],
+  ["箱の中のファイル", "docker compose exec api ls /app/media/products/", "p4-6c"],
+  ["マイグレーションが当たったか", "docker compose exec api .venv/bin/python src/manage.py showmigrations catalog", "p4-6c"],
+  ["MySQL に届いた SQL", "docker compose exec db tail -f /var/lib/mysql/general.log", "p4-6c"],
+  ["使われている倉庫の一覧", "docker compose config --volumes", "p4-6d"],
+  ["箱の中の場所が、Mac のフォルダか倉庫か", "docker compose exec api sh -c 'mount | grep /app/'", "p4-6d"],
+];
+
+let stepIdx = STEPS.length - 1;
+let selected = null;
+
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function svg(i) {
+  const s = STEPS[i];
+  const H = new Set(s.hl);
+  const has = (min) => i >= min;
+  const cls = (key, extra = "") => `${extra} ${H.has(key) ? "hl" : ""} ${selected === key ? "sel" : ""}`;
+  const wcls = (key, base) => `wire ${base} ${H.has(key) ? "hl" : ""}`;
+  const t = (key, cls2 = "badge") => `${cls2} ${H.has(key) ? "hl-text" : ""}`;
+
+  const box = (key, x, y, w, h, title, sub, badges) => `
+    <g class="box clickable ${cls(key)}" data-key="${key}" tabindex="0" role="button" aria-label="${esc(title)}">
+      <rect class="glow" x="${x - 6}" y="${y - 6}" width="${w + 12}" height="${h + 12}" rx="14"/>
+      <rect class="body" x="${x}" y="${y}" width="${w}" height="${h}" rx="9"/>
+      <text class="title" x="${x + 12}" y="${y + 23}">${esc(title)}</text>
+      ${sub ? `<text class="sub ${sub.k && H.has(sub.k) ? "hl-text" : ""}" x="${x + w - 10}" y="${y + 22}" text-anchor="end">${esc(sub.t)}</text>` : ""}
+      ${badges.map((b, n) => `
+        <circle class="${b.dot}" cx="${x + 16}" cy="${y + 42 + n * 17}" r="3.5"/>
+        <text class="${t(b.k, "badge" + (b.code ? " code" : ""))}" x="${x + 25}" y="${y + 46 + n * 17}">${esc(b.t)}</text>`).join("")}
+    </g>`;
+
+  const chip = (key, x, y, w, label, folder) => `
+    <g class="chip ${folder ? "folder" : ""} ${key ? "clickable" : ""} ${key ? cls(key) : ""}" ${key ? `data-key="${key}" tabindex="0" role="button"` : ""}>
+      <rect x="${x}" y="${y}" width="${w}" height="34" rx="17"/>
+      <text x="${x + w / 2}" y="${y + 22}" text-anchor="middle">${esc(label)}</text>
+    </g>`;
+
+  const port = (x, y, label) => `<rect class="port-bg" x="${x - 4}" y="${y - 12}" width="${label.length * 7 + 8}" height="16" rx="3"/><text class="port" x="${x}" y="${y}">${esc(label)}</text>`;
+
+  // api の中身
+  const apiB = [{ dot: "dot-src", t: "/app/src ⇐ Mac", code: true }];
+  if (i === 3) apiB.push({ dot: "dot-warn", t: "/app/media 箱の中（消える）", code: true, k: "api-media" });
+  if (i >= 4) apiB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "api-media" });
+  if (has(1)) apiB.push({ dot: "dot-conf", t: "BROKER_URL → 1番の部屋", code: true, k: "api-broker" });
+  if (has(3)) apiB.push({ dot: "dot-conf", t: "POST …/products/{id}/image", code: true, k: "api-endpoint" });
+
+  const workerB = [
+    { dot: "dot-conf", t: "command: celery worker", code: true },
+    { dot: "dot-src", t: "/app/src ⇐ Mac", code: true },
+  ];
+  if (has(4)) workerB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "worker-media" });
+
+  const redisB = [{ dot: "dot-conf", t: "0番の部屋: カート", k: "room0" }];
+  if (has(1)) redisB.push({ dot: "dot-conf", t: "1番の部屋: 受付箱", k: "room1" });
+  const dbB = [{ dot: "dot-conf", t: "商品（catalog_product）" }];
+  if (has(3)) dbB.push({ dot: "dot-conf", t: "image 列 = 画像のパス", k: "db-col" });
+
+  const apiH = 52 + apiB.length * 17;
+  return `
+  <svg viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg" font-family="Zen Kaku Gothic New, Hiragino Sans, sans-serif">
+    <text class="region-label" x="20" y="22">MAC（あなたのパソコン）</text>
+    ${chip(null, 20, 34, 120, "ブラウザ")}
+    ${chip(null, 160, 34, 90, "curl")}
+    ${chip(null, 270, 34, 90, "Zed")}
+    ${chip("src", 410, 34, 190, "フォルダ apps/api/src", true)}
+    ${chip(null, 640, 34, 120, "DBeaver")}
+    ${chip(null, 800, 34, 170, "Redis Insight")}
+
+    <rect class="docker-frame" x="10" y="120" width="980" height="590" rx="14"/>
+    <text class="region-label" x="24" y="142">DOCKER の中</text>
+
+    <g class="clickable ${cls("front")}" data-key="front" tabindex="0" role="button" aria-label="道 front">
+      <rect class="net-front" x="30" y="156" width="520" height="276" rx="12"/>
+      <text class="net-label-front" x="46" y="180">道 front</text>
+    </g>
+    <g class="clickable ${cls("back")}" data-key="back" tabindex="0" role="button" aria-label="道 back">
+      <rect class="net-back" x="290" y="300" width="690" height="290" rx="12"/>
+      <text class="net-label-back" x="900" y="324">道 back</text>
+    </g>
+
+    <!-- 窓口 -->
+    <path class="wire" d="M80 68 C 80 120, 130 140, 130 196"/>
+    ${port(92, 112, ":5173")}
+    <path class="wire" d="M205 68 C 205 180, 360 220, 360 ${404 - apiH + 0}"/>
+    ${port(214, 112, ":8000")}
+    <path class="wire" d="M315 68 C 315 170, 450 230, 450 ${404 - apiH + 0}"/>
+    ${port(322, 132, "127.0.0.1:5678")}
+    <path class="wire" d="M700 68 C 700 200, 690 260, 690 342"/>
+    ${port(708, 112, "127.0.0.1:3306")}
+    <path class="wire" d="M885 68 C 885 200, 880 260, 880 342"/>
+    ${port(806, 132, "127.0.0.1:6379")}
+
+    <!-- Mac のフォルダを写す -->
+    <path class="wire mount" d="M505 68 C 505 160, 505 200, 505 ${404 - apiH}"/>
+    ${has(2) ? `<path class="${wcls("w-src-worker", "mount")}" d="M600 52 C 640 52, 560 300, 560 470 L 560 520 L 530 520"/>` : ""}
+
+    <!-- アプリのつながり -->
+    <path class="wire app" d="M240 240 C 280 240, 290 ${404 - apiH / 2}, 316 ${404 - apiH / 2}"/>
+    <path class="wire app" d="M528 370 C 560 370, 580 384, 606 384"/>
+    <path class="${wcls("w-api-redis", "app")}" d="M528 330 C 640 300, 760 300, 800 342"/>
+    ${has(2) ? `<path class="${wcls("w-watch", "watch")}" d="M532 500 C 700 500, 860 480, 880 ${428 + (redisB.length - 1) * 17}"/>
+       <text class="port ${H.has("w-watch") ? "hl-text" : ""}" x="640" y="520">1番の部屋を見張る</text>` : ""}
+
+    ${box("web", 50, 196, 190, 86, "web", null, [{ dot: "dot-src", t: "画面（React）" }])}
+    ${box("api", 316, 404 - apiH, 212, apiH, "api", has(2) ? { t: "ec-api:dev", k: "api-image" } : null, apiB)}
+    ${has(2) ? box("worker", 316, 448, 212, 52 + workerB.length * 17, "worker", { t: "ec-api:dev" }, workerB) : ""}
+    ${box("db", 606, 342, 170, 52 + dbB.length * 17, "db", { t: "mysql:8.4" }, dbB)}
+    ${box("redis", 796, 342, 170, 52 + redisB.length * 17, "redis", { t: "redis:8-alpine" }, redisB)}
+
+    <!-- 倉庫 -->
+    <path class="wire vol" d="M691 ${342 + 52 + dbB.length * 17} L 691 626"/>
+    <g class="store clickable ${cls("db-data")}" data-key="db-data" tabindex="0" role="button" aria-label="倉庫 db-data">
+      <rect class="glow" x="600" y="620" width="182" height="72" rx="12"/>
+      <rect x="606" y="626" width="170" height="60" rx="8"/>
+      <text x="620" y="650">倉庫 db-data</text><text class="sub" x="620" y="672">/var/lib/mysql</text>
+    </g>
+    <path class="wire" d="M881 ${342 + 52 + redisB.length * 17} L 881 626" stroke-dasharray="3 4"/>
+    <g class="store none clickable ${cls("redis-none")}" data-key="redis-none" tabindex="0" role="button" aria-label="redis には倉庫なし">
+      <rect x="796" y="626" width="170" height="60" rx="8"/>
+      <text x="810" y="650">倉庫なし</text><text class="sub" x="810" y="672">作り直すと消える</text>
+    </g>
+    ${has(4) ? `
+      <path class="${wcls("w-api-media", "vol")}" d="M316 ${404 - apiH / 2} C 270 ${404 - apiH / 2}, 260 560, 260 626"/>
+      <path class="${wcls("w-worker-media", "vol")}" d="M420 ${448 + 52 + workerB.length * 17} L 420 626 L 330 626"/>
+      <g class="store clickable ${cls("media")}" data-key="media" tabindex="0" role="button" aria-label="倉庫 media">
+        <rect class="glow" x="174" y="620" width="182" height="72" rx="12"/>
+        <rect x="180" y="626" width="170" height="60" rx="8"/>
+        <text x="194" y="650">倉庫 media</text><text class="sub" x="194" y="672">/app/media（画像）</text>
+      </g>` : ""}
+    ${i === 3 ? `<text class="port hl-text" x="40" y="660">画像は api の箱の中だけ。worker からは見えない</text>` : ""}
+  </svg>`;
+}
+
+function renderSteps() {
+  const nav = document.getElementById("steps");
+  nav.innerHTML = STEPS.map((s, n) => `<button type="button" data-i="${n}" aria-pressed="${n === stepIdx}"><span class="tag">${s.tag}</span>${esc(s.title)}</button>`).join("")
+    + FUTURE.map(f => `<button type="button" class="future" disabled title="まだ作っていません"><span class="tag">${f.tag}</span>${esc(f.title)}</button>`).join("");
+  nav.querySelectorAll("button[data-i]").forEach(b => b.addEventListener("click", () => { stepIdx = +b.dataset.i; selected = null; go(); }));
+}
+
+function renderSide() {
+  const side = document.getElementById("side");
+  if (selected && INFO[selected]) {
+    const d = INFO[selected];
+    side.innerHTML = `<div class="kind">${esc(d.kind)}</div><h2>${esc(d.name)}</h2>
+      <dl><dt>正式名称</dt><dd>${esc(d.formal)}</dd>
+      <dt>かみくだくと</dt><dd>${esc(d.plain)}</dd>
+      <dt>もう少し詳しく</dt><dd>${esc(d.detail)}</dd>
+      <dt>🔎 確かめるには</dt><dd><span class="cmd">${esc(d.cmd)}</span></dd></dl>
+      <p class="hint">ほかの部品をクリックすると、説明が切り替わります。</p>`;
+  } else {
+    const s = STEPS[stepIdx];
+    side.innerHTML = `<div class="kind">${esc(s.tag)} のまとめ</div><h2>${esc(s.title)}</h2>
+      <p style="margin:0">赤く光っている所が、このステップで変わった所です。</p>
+      <p class="hint">図の箱・道・倉庫・Mac のフォルダをクリックすると、正式名称と言い換え、確かめるコマンドが出ます。</p>`;
+  }
+}
+
+function renderGrowth() {
+  const done = STEPS.length - 1;
+  const notes = GROWTH.filter(g => g.note).length;
+  const cans = GROWTH.reduce((a, g) => a + g.can.length, 0);
+  document.getElementById("stats").innerHTML = `
+    <div><b>${done}</b><span>終えたステップ（6a〜6d）</span></div>
+    <div><b>${cans}</b><span>できるようになったこと</span></div>
+    <div><b>${LOOKUP.length}</b><span>覚えた調べ方</span></div>
+    <div><b>${notes}</b><span>ひとこと</span></div>`;
+  document.getElementById("growth").innerHTML = GROWTH.map(g => `
+    <article class="card"><span class="when">${esc(g.tag)} ・ ${esc(g.when)}</span><h3>${esc(g.title)}</h3>
+      <ul>${g.can.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+      ${g.note ? `<blockquote>${esc(g.note)}</blockquote>` : ""}</article>`).join("")
+    + `<article class="card next"><span class="when">次</span><h3>6e メモを受付箱に入れる</h3><p style="margin:0">api が「サムネイルを作って」のメモを 1番の部屋に入れ、worker に届ける。</p></article>`;
+}
+
+function renderLookup() {
+  const cur = STEPS[stepIdx].id;
+  const order = STEPS.map(s => s.id);
+  const tag = id => STEPS.find(s => s.id === id).tag;
+  document.querySelector("#lookup tbody").innerHTML = LOOKUP
+    .filter(r => order.indexOf(r[2]) <= stepIdx)
+    .map(r => `<tr class="${r[2] === cur ? "new" : ""}"><td>${esc(r[0])}</td><td><code>${esc(r[1])}</code></td><td class="step">${esc(tag(r[2]))}</td></tr>`).join("");
+}
+
+function go() {
+  const s = STEPS[stepIdx];
+  document.getElementById("q").textContent = `❓ ${s.tag}：${s.q}`;
+  document.getElementById("changes").innerHTML = s.changes.map(c => `<li>${esc(c)}</li>`).join("");
+  const dg = document.getElementById("diagram");
+  dg.innerHTML = svg(stepIdx);
+  dg.querySelectorAll(".clickable[data-key]").forEach(el => {
+    const pick = () => { selected = el.dataset.key; go(); };
+    el.addEventListener("click", pick);
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+  });
+  document.querySelectorAll("#steps button[data-i]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === stepIdx)));
+  renderSide();
+  renderLookup();
+  try { if (location.hash.slice(1) !== s.id) history.replaceState(null, "", "#" + s.id); } catch (e) {}
+}
+
+function fromHash() {
+  const h = location.hash.slice(1);
+  const n = STEPS.findIndex(s => s.id === h);
+  if (n >= 0) stepIdx = n;
+}
+fromHash();
+renderSteps();
+renderGrowth();
+go();
+window.addEventListener("hashchange", () => { fromHash(); selected = null; go(); });
+</script>

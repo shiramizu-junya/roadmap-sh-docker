@@ -3,6 +3,8 @@
 2026-11-15 に、`docker compose ps` などのコマンドで本物を1つずつ確かめながら描いた地図。
 P4-6c 以降の各ステップの「🧭 全体の中のいま」は、この地図を使う。ステップが進んだら書き足す。
 
+🐳 **動く図で見たいとき**: `docs/visual/docker-inside.html` をブラウザで開く（`open docs/visual/docker-inside.html`）。ステップごとに Docker の中を切り替えて見られる。
+
 ## 1枚の地図
 
 ```text
