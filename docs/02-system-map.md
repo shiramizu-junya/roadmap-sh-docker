@@ -17,10 +17,11 @@ Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
 
                                         【道 back】 api・worker・db・redis
                                         api ──▶ db、redis
+                                        api ──▶ redis の 1番にメモを入れる（P4-6e で追加）
 DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消えない）
 Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
                                                 0番の部屋: カート / 1番の部屋: 受付箱
-（窓口なし）                            worker ──▶ redis の 1番を見張る
+（窓口なし）                            worker ──▶ redis の 1番を見張り、メモが来たら仕事をする
                                         api・worker ──▶ 倉庫 media（画像。消えない。P4-6d で追加）
 ```
 
@@ -84,6 +85,9 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | 箱の中のこの場所が何につながっているか | `docker compose exec <サービス名> sh -c 'mount \| grep /app/'`（`virtiofs` = Mac のフォルダ、`ext4` = 倉庫） |
 | どこから入れるか（窓口） | `docker compose ps --format '{{.Service}}  {{.Ports}}'` |
 | `compose.yaml` の書き方が正しいか | `docker compose config --quiet`（何も出なければ OK） |
+| worker が知っている仕事（task）の一覧 | `docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered`（起動ログの `[tasks]` の下でも分かる） |
+| worker にメモが届いて、仕事が終わったか | `docker compose logs -f --since 1m worker` の `received`（受け取った）と `succeeded`（終わった） |
+| 受付箱にたまっているメモの枚数 | `docker compose exec redis redis-cli -n 1 LLEN celery`（worker が動いていると、すぐ 0 に戻る） |
 
 ## つまずきメモ
 
@@ -91,3 +95,4 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | --- | --- | --- |
 | `.env` に書いたのに `KeyError` | `env_file:` は**箱を作るときに一度だけ**渡る。古い箱を使い回していた | `docker compose up -d <サービス名>` で作り直す |
 | `compose.yaml` が `mapping values are not allowed` | 字下げのずれ（全角スペース・保存時の自動整形） | `.zed/settings.json` で YAML の自動整形を止めた。`watch:` は1行の書き方にした |
+| `.py` を変えたのに worker が古いまま／`Received unregistered task` | worker（Celery）は、`runserver` と違ってコードを自分で読み直さない。名簿に無い仕事のメモは捨てる | `docker compose restart worker`。`config/celery.py` に `app.autodiscover_tasks()` があるかも見る |

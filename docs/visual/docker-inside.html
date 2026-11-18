@@ -104,6 +104,12 @@ code, .code { font-family: var(--font-code); font-size: 0.86em; background: var(
 .box .sub { fill: var(--muted); font-size: 11.5px; font-family: var(--font-code); }
 .box .badge { fill: var(--ink); font-size: 12px; }
 .box .badge.code { font-family: var(--font-code); font-size: 11.5px; }
+.badge-link text { text-decoration: underline dotted; text-underline-offset: 3px; }
+.badge-link.sel text, .badge-link:hover text { fill: var(--hot); }
+.hit { fill: transparent; }
+.arrowhead { fill: var(--ink); }
+.memo rect { fill: var(--surface); stroke: var(--ink); stroke-width: 1.4; }
+.memo text { fill: var(--ink); font-size: 12.5px; font-weight: 700; }
 .dot-src { fill: var(--mac); } .dot-store { fill: var(--store); } .dot-warn { fill: var(--hot); } .dot-conf { fill: var(--back); }
 .chip rect { fill: var(--surface); stroke: var(--mac); stroke-width: 1.2; }
 .chip text { fill: var(--ink); font-size: 13px; }
@@ -213,9 +219,14 @@ const STEPS = [
     q: "画像を消えない倉庫に置き、worker からも見えるようにするには？",
     changes: ["倉庫 media を作った（あなたが C を選んだ）", "api と worker の両方の /app/media につないだ", "api の箱を作り直しても、画像が消えなくなった"],
     hl: ["media", "w-api-media", "w-worker-media", "api-media", "worker-media"] },
+  { id: "p4-6e", tag: "6e", title: "メモを受付箱に入れ、worker に届ける",
+    q: "「画像が届いた。サムネイルを作って」を、api はどうやって worker に伝えるのか？",
+    changes: ["仕事（task）make_thumbnail を catalog/tasks.py に書いた", "worker が起動のとき tasks.py を探して、仕事を覚える（autodiscover_tasks）", "api が画像を保存したら、.delay() でメモを 1番の部屋に入れる", "worker がメモを取り出して仕事をする（received → succeeded）"],
+    hl: ["w-memo", "memo", "room1", "api-delay", "worker-task", "w-watch"] },
 ];
+// 読み手が終えたステップ（成長の記録の数に使う）
+const DONE_UNTIL = "p4-6e";
 const FUTURE = [
-  { tag: "6e", title: "メモを受付箱に入れる" },
   { tag: "6f", title: "サムネイルを作る" },
   { tag: "6g", title: "画面に出す" },
   { tag: "6h", title: "止めるとき待たせる" },
@@ -224,13 +235,16 @@ const FUTURE = [
 const INFO = {
   web: { kind: "箱（コンテナ）", name: "web", formal: "service / container", plain: "画面の係。ブラウザに React の画面を見せる。", detail: "道は front だけ。db や redis へは、必ず api を通る。", cmd: "docker compose logs web" },
   api: { kind: "箱（コンテナ）", name: "api", formal: "service / container（Django + Django Ninja）", plain: "窓口。アプリのコードがあり、画面や curl からの頼みを受ける。", detail: "front と back の両方の道にいる、ただ1つの箱。起動命令はイメージの CMD（runserver）のまま。", cmd: "docker compose logs --since 1m api" },
-  worker: { kind: "箱（コンテナ）", name: "worker", formal: "Celery worker", plain: "裏方。受付箱（Redis の 1番の部屋）を見張り、仕事のメモが来たら仕事をする。", detail: "api と同じイメージ ec-api:dev。command: で起動命令を celery worker に置き換えている。窓口（ports）は無い。", cmd: "docker compose logs worker" },
+  worker: { kind: "箱（コンテナ）", name: "worker", formal: "Celery worker", plain: "裏方。受付箱（Redis の 1番の部屋）を見張り、仕事のメモが来たら仕事をする。", detail: "api と同じイメージ ec-api:dev。command: で起動命令を celery worker に置き換えている。窓口（ports）は無い。中には受付係（MainProcess）がメモを取り出し、作業係（ForkPoolWorker）が仕事をする。", cmd: "docker compose logs -f --since 1m worker" },
   db: { kind: "箱（コンテナ）", name: "db", formal: "MySQL 8.4（RDBMS: リレーショナルデータベース）", plain: "消えたら困るデータ（商品）を、ディスクにずっと取っておく。", detail: "2秒ごとにヘルスチェック（mysqladmin ping）を受けている。6c から、商品の image 列に画像のパス（文字）が入る。", cmd: "docker compose exec db mysql -uec -pec-pass ec" },
   redis: { kind: "箱（コンテナ）", name: "redis", formal: "Redis（in-memory data store）", plain: "すぐ変わるデータを、メモリで速く出し入れする置き場。", detail: "中は 0〜15番の部屋（logical database）に分かれている。0番 = カート、1番 = 受付箱。倉庫が無いので、箱を作り直すと中身は消える。", cmd: "docker compose exec redis redis-cli -n 1 KEYS '*'" },
   front: { kind: "道（ネットワーク）", name: "front", formal: "network", plain: "画面（web）と窓口（api）が話す道。", detail: "同じ道にいる箱どうしだけが、サービス名で呼び合える（名前解決 / DNS）。", cmd: "docker network inspect roadmap-sh-docker_front --format '{{range .Containers}}{{.Name}} {{end}}'" },
   back: { kind: "道（ネットワーク）", name: "back", formal: "network", plain: "裏側の道。api・worker・db・redis がいる。", detail: "web は入れない。話す必要のない箱どうしをつながないようにする考え方を、ネットワーク分離（network segmentation）と呼ぶ。", cmd: "docker network inspect roadmap-sh-docker_back --format '{{range .Containers}}{{.Name}} {{end}}'" },
   "db-data": { kind: "倉庫", name: "db-data", formal: "named volume（名前付きボリューム）", plain: "db のデータを置く倉庫。箱を消しても残る。", detail: "db の /var/lib/mysql につながっている。", cmd: "docker volume ls --filter name=roadmap-sh-docker" },
   media: { kind: "倉庫", name: "media", formal: "named volume（名前付きボリューム）", plain: "画像を置く倉庫。api と worker の両方の /app/media につながっている。", detail: "画像はコードではなくデータなので、Mac のフォルダではなく倉庫に置く。本番のサーバーにも Mac は無い。", cmd: "docker compose exec api sh -c 'mount | grep /app/'" },
+  delay: { kind: "api のコード", name: "make_thumbnail.delay(product.id)", formal: "Task.delay()（Celery）", plain: "仕事を今やらず、「この仕事を、この引数で」というメモにして受付箱に入れる。", detail: "api は画像を保存したあとにこれを呼び、すぐ saved と返す。.delay を外して make_thumbnail(product.id) と呼ぶと、api がその場で仕事をしてしまう。.delay は @app.task が関数に付けた道具なので、@app.task を消すと AttributeError: 'function' object has no attribute 'delay' になる。", cmd: "docker compose logs --since 1m api" },
+  task: { kind: "worker の仕事", name: "catalog.tasks.make_thumbnail", formal: "task（Celery）", plain: "worker に任せる仕事1つ分。中身はふつうの Python の関数に @app.task を付けたもの。", detail: "worker は起動のとき、config/celery.py の app.autodiscover_tasks() で各アプリの tasks.py を探し、仕事の名簿（task registry）に載せる。名簿に無い仕事のメモが来ると「Received unregistered task」と言って捨てる。worker はコードを自分で読み直さないので、.py を変えたら docker compose restart worker。", cmd: "docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered" },
+  memo: { kind: "受付箱に入るもの", name: "メモ", formal: "message（task message）", plain: "受付箱に入れるメモ1枚。「どの仕事を・どの引数で」だけが書いてある。画像そのものは入っていない。", detail: "Redis の 1番の部屋の、リスト celery に JSON で入る。worker が動いていると一瞬で取り出されるので、worker を止めて送ると、たまる様子が見える。", cmd: "docker compose exec redis redis-cli -n 1 LLEN celery" },
   "redis-none": { kind: "倉庫", name: "（redis には倉庫なし）", formal: "—", plain: "redis の中身は箱の中にしか無い。", detail: "11/15 に cart:test を入れてから箱を作り直し、消えることを確かめた。", cmd: "docker compose exec redis redis-cli -n 0 KEYS '*'" },
   src: { kind: "Mac のフォルダ", name: "apps/api/src", formal: "bind mount（バインドマウント）", plain: "Mac で書いたコードを、そのまま箱の中の /app/src に見せる。", detail: "api と worker の両方に写している。コードは「人が Mac で書くもの」なので、倉庫ではなく Mac のフォルダを写す。", cmd: "docker compose exec api sh -c 'mount | grep /app/src'" },
   ports: { kind: "窓口（ポート）", name: "ports", formal: "port publishing（ポート公開）", plain: "Mac の番号と、箱の中の番号をつなぐ入り口。", detail: "127.0.0.1 は「この Mac からだけ」、0.0.0.0 は「どこからでも（同じ Wi-Fi の他のパソコンからも）」。", cmd: "docker compose ps --format '{{.Service}}  {{.Ports}}'" },
@@ -250,6 +264,8 @@ const GROWTH = [
     can: ["画像を保存したとき、ファイルと db にそれぞれ何が入るかを説明できる", "MEDIA_ROOT と upload_to から、ファイルの置き場所を組み立てられる", "api の箱を作り直したら画像がどうなるかを、打つ前に予想できる"] },
   { tag: "6d", title: "画像の倉庫を作って worker と分け合う", when: "11/18",
     can: ["画像を Mac のフォルダではなく倉庫に置く理由を、コードとデータの違いで説明できる", "bind mount と named volume を、見た目で見分けられる", "直し方を、教材の答えを見る前に自分で選べた（C）"] },
+  { tag: "6e", title: "メモを受付箱に入れ、worker に届ける", when: "11/18",
+    can: ["make_thumbnail(1) と .delay(1) で、仕事をする箱の違いを説明できる", "worker を止めて送るとメモが受付箱にたまることを予想し、2 → 0 で確かめた", "@app.task が .delay() を付け足していることを、エラーから言えた", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
 ];
 
 const LOOKUP = [
@@ -267,6 +283,10 @@ const LOOKUP = [
   ["MySQL に届いた SQL", "docker compose exec db tail -f /var/lib/mysql/general.log", "p4-6c"],
   ["使われている倉庫の一覧", "docker compose config --volumes", "p4-6d"],
   ["箱の中の場所が、Mac のフォルダか倉庫か", "docker compose exec api sh -c 'mount | grep /app/'", "p4-6d"],
+  ["worker が知っている仕事の一覧", "docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered", "p4-6e"],
+  ["worker にメモが届いて、仕事が終わったか", "docker compose logs -f --since 1m worker（received と succeeded）", "p4-6e"],
+  ["受付箱にたまっているメモの枚数", "docker compose exec redis redis-cli -n 1 LLEN celery", "p4-6e"],
+  ["コードを変えたあと worker に読み直させる", "docker compose restart worker", "p4-6e"],
 ];
 
 let stepIdx = STEPS.length - 1;
@@ -289,8 +309,10 @@ function svg(i) {
       <text class="title" x="${x + 12}" y="${y + 23}">${esc(title)}</text>
       ${sub ? `<text class="sub ${sub.k && H.has(sub.k) ? "hl-text" : ""}" x="${x + w - 10}" y="${y + 22}" text-anchor="end">${esc(sub.t)}</text>` : ""}
       ${badges.map((b, n) => `
+        <g ${b.info ? `class="badge-link clickable ${selected === b.info ? "sel" : ""}" data-key="${b.info}" tabindex="0" role="button" aria-label="${esc(b.t)}"` : ""}>
+        ${b.info ? `<rect class="hit" x="${x + 8}" y="${y + 33 + n * 17}" width="${w - 16}" height="17"/>` : ""}
         <circle class="${b.dot}" cx="${x + 16}" cy="${y + 42 + n * 17}" r="3.5"/>
-        <text class="${t(b.k, "badge" + (b.code ? " code" : ""))}" x="${x + 25}" y="${y + 46 + n * 17}">${esc(b.t)}</text>`).join("")}
+        <text class="${t(b.k, "badge" + (b.code ? " code" : ""))}" x="${x + 25}" y="${y + 46 + n * 17}">${esc(b.t)}</text></g>`).join("")}
     </g>`;
 
   const chip = (key, x, y, w, label, folder) => `
@@ -307,12 +329,14 @@ function svg(i) {
   if (i >= 4) apiB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "api-media" });
   if (has(1)) apiB.push({ dot: "dot-conf", t: "BROKER_URL → 1番の部屋", code: true, k: "api-broker" });
   if (has(3)) apiB.push({ dot: "dot-conf", t: "POST …/products/{id}/image", code: true, k: "api-endpoint" });
+  if (has(5)) apiB.push({ dot: "dot-conf", t: "保存のあと .delay(product.id)", code: true, k: "api-delay", info: "delay" });
 
   const workerB = [
     { dot: "dot-conf", t: "command: celery worker", code: true },
     { dot: "dot-src", t: "/app/src ⇐ Mac", code: true },
   ];
   if (has(4)) workerB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "worker-media" });
+  if (has(5)) workerB.push({ dot: "dot-conf", t: "仕事: make_thumbnail", code: true, k: "worker-task", info: "task" });
 
   const redisB = [{ dot: "dot-conf", t: "0番の部屋: カート", k: "room0" }];
   if (has(1)) redisB.push({ dot: "dot-conf", t: "1番の部屋: 受付箱", k: "room1" });
@@ -322,6 +346,7 @@ function svg(i) {
   const apiH = 52 + apiB.length * 17;
   return `
   <svg viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg" font-family="Zen Kaku Gothic New, Hiragino Sans, sans-serif">
+    <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>
     <text class="region-label" x="20" y="22">MAC（あなたのパソコン）</text>
     ${chip(null, 20, 34, 120, "ブラウザ")}
     ${chip(null, 160, 34, 90, "curl")}
@@ -363,7 +388,13 @@ function svg(i) {
     <path class="wire app" d="M528 370 C 560 370, 580 384, 606 384"/>
     <path class="${wcls("w-api-redis", "app")}" d="M528 330 C 640 300, 760 300, 800 342"/>
     ${has(2) ? `<path class="${wcls("w-watch", "watch")}" d="M532 500 C 700 500, 860 480, 880 ${428 + (redisB.length - 1) * 17}"/>
-       <text class="port ${H.has("w-watch") ? "hl-text" : ""}" x="640" y="520">1番の部屋を見張る</text>` : ""}
+       <text class="port ${H.has("w-watch") ? "hl-text" : ""}" x="640" y="520">${has(5) ? "1番の部屋からメモを取り出す" : "1番の部屋を見張る"}</text>` : ""}
+    ${has(5) ? `<path class="${wcls("w-memo", "app")}" d="M528 ${404 - apiH + 30} C 640 236, 840 236, 870 340" marker-end="url(#ah)"/>
+       <g class="memo clickable ${cls("memo")}" data-key="memo" tabindex="0" role="button" aria-label="メモ（message）">
+         <rect class="glow" x="604" y="222" width="152" height="40" rx="10"/>
+         <rect x="610" y="228" width="140" height="28" rx="6"/>
+         <text x="680" y="247" text-anchor="middle">メモ（.delay）</text>
+       </g>` : ""}
 
     ${box("web", 50, 196, 190, 86, "web", null, [{ dot: "dot-src", t: "画面（React）" }])}
     ${box("api", 316, 404 - apiH, 212, apiH, "api", has(2) ? { t: "ec-api:dev", k: "api-image" } : null, apiB)}
@@ -421,11 +452,12 @@ function renderSide() {
 }
 
 function renderGrowth() {
-  const done = STEPS.length - 1;
+  const doneIdx = STEPS.findIndex(s => s.id === DONE_UNTIL);
+  const done = doneIdx;
   const notes = GROWTH.filter(g => g.note).length;
   const cans = GROWTH.reduce((a, g) => a + g.can.length, 0);
   document.getElementById("stats").innerHTML = `
-    <div><b>${done}</b><span>終えたステップ（6a〜6d）</span></div>
+    <div><b>${done}</b><span>終えたステップ（6a〜${esc(STEPS[doneIdx].tag)}）</span></div>
     <div><b>${cans}</b><span>できるようになったこと</span></div>
     <div><b>${LOOKUP.length}</b><span>覚えた調べ方</span></div>
     <div><b>${notes}</b><span>ひとこと</span></div>`;
@@ -433,7 +465,7 @@ function renderGrowth() {
     <article class="card"><span class="when">${esc(g.tag)} ・ ${esc(g.when)}</span><h3>${esc(g.title)}</h3>
       <ul>${g.can.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
       ${g.note ? `<blockquote>${esc(g.note)}</blockquote>` : ""}</article>`).join("")
-    + `<article class="card next"><span class="when">次</span><h3>6e メモを受付箱に入れる</h3><p style="margin:0">api が「サムネイルを作って」のメモを 1番の部屋に入れ、worker に届ける。</p></article>`;
+    + `<article class="card next"><span class="when">次</span><h3>6f サムネイルを作る</h3><p style="margin:0">worker が倉庫 media の画像を開いて小さくし、サムネイルとして保存する。</p></article>`;
 }
 
 function renderLookup() {
@@ -452,9 +484,9 @@ function go() {
   const dg = document.getElementById("diagram");
   dg.innerHTML = svg(stepIdx);
   dg.querySelectorAll(".clickable[data-key]").forEach(el => {
-    const pick = () => { selected = el.dataset.key; go(); };
+    const pick = (e) => { if (e) e.stopPropagation(); selected = el.dataset.key; go(); };
     el.addEventListener("click", pick);
-    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(); } });
+    el.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); pick(e); } });
   });
   document.querySelectorAll("#steps button[data-i]").forEach(b => b.setAttribute("aria-pressed", String(+b.dataset.i === stepIdx)));
   renderSide();

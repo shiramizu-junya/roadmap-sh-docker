@@ -3588,7 +3588,581 @@ worker の箱
 **残った問い**: worker から画像が見えるようになった。でも worker は、**いつ**サムネイルを作ればいいのかを知らない。画像が届いたことを、api はどうやって worker に伝えるのか？ P4-6a で作った**受付箱**の出番だ。
 
 ---
-▶ **次**: P4-6e メモを受付箱に入れ、worker に届ける（まだ作っていません。P4-6d が終わったら作ります）
+▶ **次**: P4-6e メモを受付箱に入れ、worker に届ける
+
+---
+
+## P4-6e: メモを受付箱に入れ、worker に届ける
+
+**❓ この回の問い**: 前回（P4-6d）で、worker からも画像が見えるようになった。でも worker は、**いつ**サムネイルを作ればいいのかを知らない。
+→ **「画像が届いたよ。サムネイルを作って」を、api はどうやって worker に伝えるのか？**
+
+**作ること / 確かめること**: worker がやる仕事（task）を1つ作り、api が画像を保存したら、その仕事のメモを受付箱（Redis の 1番の部屋）に入れる。worker がメモを受け取って仕事をしたことを、ログで確かめる。**サムネイルはまだ作らない**（P4-6f）。今日の仕事は「受け取った」と返すだけ
+**重要度**: 🔴 毎日使う — 「重い仕事は受付箱にメモを入れて、裏方に任せる」は、Web アプリでとてもよく使う形だから
+**前ステップとの接続**: P4-6a で作った受付箱、P4-6b で起動した worker、P4-6c で作った画像の窓口を、今日はじめて**つなげる**。`compose.yaml` は変えない。変えるのは `.py` の3つのファイル
+
+**P4-6 ぜんたいの地図での位置**: ②③（② api がメモを受付箱に入れる → ③ worker が取り出す）
+
+### 🔁 前回の思い出し
+
+**問い**: api が `/app/media/products/sample.jpg` に画像を書いたとき、worker の `/app/media/products/` に見えた `sample.jpg` は、A と B のどちらでしたか？
+A. api の画像を**コピーした**もの　B. api と**同じ倉庫の中**にある、同じファイル
+
+<details><summary>答え</summary>
+
+**B** です。倉庫 `media` は1つだけで、api と worker の2つの箱から、同じ場所を見ています。だから今日、worker に渡すメモには**画像そのものを入れなくてよい**のです。「何番の商品か」だけ書けば、worker は倉庫から画像を探せます。
+
+</details>
+
+### 🛠️ 先に自分で決める
+
+教材が答えを出す前に、**あなたが伝え方を決めます。** このあとのチャンクは、あなたの選んだ方針の答え合わせとして進みます。
+
+**困りごと**（P4-6d の残った問い）
+
+- api は画像を受け取って倉庫に保存できる。worker も倉庫の画像を読める
+- でも、api が「画像が届いた」ことを worker に伝える方法が**まだ無い**。worker は何もせずに待っている
+
+**🤔 どの伝え方を選びますか？** 1つ選んで、理由を一言で書いてください（「分からない」でも大丈夫です）。
+
+| 案 | 伝え方 |
+| --- | --- |
+| A | api が worker に**直接**頼む（worker にも窓口を作り、api から HTTP で呼ぶ） |
+| B | api が**受付箱**（Redis の 1番の部屋）に「商品 1 のサムネイルを作って」という**メモを入れる**。worker は受付箱を見張っていて、メモが来たら取り出して仕事をする |
+| C | 伝えない。**api が自分で**サムネイルを作ってから返事をする |
+
+<details><summary>ヒント</summary>
+
+全体の地図（`docs/02-system-map.md` の「1枚の地図」と「④ 窓口（ポート）」）を見てください。worker には窓口がありますか？ それから、P4-6 ぜんたいの地図（このファイルの「P4-6: ワーカーでサムネイルを作る」の見出しの下）の「見てほしいところ」も読んでみてください。
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+この教材は **B** で進めます。
+
+| 案 | 判定 | 理由 |
+| --- | --- | --- |
+| A | △ 動かせる | worker に窓口（Web サーバー）を新しく作る必要があります。それに、worker が止まっている・忙しいと、api は**頼むことすらできず**、エラーになるか待たされます |
+| B | ◎ | api はメモを入れたら、**すぐ返事ができます**。worker が止まっていても、メモは受付箱で**待っていて**くれます（チャンク3 の 🔎 で本当に確かめます）。P4-6a で受付箱を、P4-6b で「受付箱を見張る worker」を作ったのは、このためでした |
+| C | ✗ | 画像を縮めるのは時間がかかる仕事です。その間、画像を送った人は**ずっと待たされます**。worker を分けた意味がなくなります |
+
+**A と B のちがいは「直接」か「あいだに受付箱があるか」です。** あいだに受付箱があると、頼む側（api）と仕事をする側（worker）が、**お互いの都合を気にしなくてよく**なります。
+
+</details>
+
+### 🐳 Docker の中の図
+
+動く図のページ（`docs/visual/docker-inside.html`。ブラウザで `open docs/visual/docker-inside.html`）で、**「6d」と「6e」のボタンを交互に押して**比べてください。赤く光るのが今日変わる所です。api から redis の 1番の部屋へ向かう矢印（メモを入れる）と、worker が知っている仕事（`make_thumbnail`）が増えます。
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の「1枚の地図」に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+curl          ── :8000 どこからでも ──▶ api
+Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
+
+                                        【道 back】 api・worker・db・redis
+                                        api ──▶ db、redis
+                                        api ──▶ redis の 1番にメモを入れる  ★ 今日
+DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消えない）
+Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
+                                                0番の部屋: カート / 1番の部屋: 受付箱
+（窓口なし）                            worker ──▶ redis の 1番を見張る  ★ 今日: メモを取り出して仕事をする
+                                        api・worker ──▶ 倉庫 media（画像。消えない）
+```
+
+**見てほしいところ**: 今日は**新しい箱・道・倉庫・窓口は増えません。** P4-6b からずっと「1番を見張って」いた worker に、はじめてメモが届きます。
+
+### 🗺️ 今日の地図
+
+```text
+api の箱                                           worker の箱
+  ① catalog/tasks.py  仕事の中身を書く  … チャンク1  （同じ src を写しているので、worker にもある）
+  ② config/celery.py  仕事の一覧を探させる … チャンク2 ──▶ 起動のとき、① を見つけて覚える
+  ③ config/api.py     画像を保存したら、
+                      メモを受付箱に入れる … チャンク3
+        │
+        ▼
+   Redis の 1番の部屋（受付箱）にメモが1枚入る
+        │
+        ▼
+  ④ worker がメモを取り出し、① の仕事をする（書くコードは無い。ログで見る）
+```
+
+**見てほしいところ**: ①〜③ はすべて `apps/api/src` の中のファイルです。api と worker は**同じ `src` を写している**ので（P4-6b）、①②は worker の中にもあります。**書く場所は1つ、使う箱は2つ**です。
+
+### 6e-0. このステップの初出
+
+**Celery**: `@app.task`、`app.autodiscover_tasks()`、`.delay()`、`celery inspect registered`
+**Docker**: `docker compose restart`
+**Redis**: `LLEN`（メモの枚数を数える）、`LRANGE`（メモを見る）
+**Python**: `@`（デコレータ）、`f"..."`（f文字列）
+
+---
+
+### チャンク1: worker にやらせる仕事を書く（`apps/api/src/catalog/tasks.py`）— 地図の①
+
+**このチャンクの目的**: 「サムネイルを作る」仕事の**入れ物**を作る。中身は、今日は「受け取った」と返すだけ。
+
+**🤔 先に考える**: これから書く `make_thumbnail` を、api の箱の中で**ふつうの関数として**呼んだら（`make_thumbnail(1)`）、仕事をするのは A と B のどちらだと思いますか？
+A. api の箱　B. worker の箱
+
+理由も一言で（「分からない」でも大丈夫です）。
+
+<details><summary>答え</summary>
+
+**A** です。ふつうに呼ぶと、**呼んだ箱（api）がその場で**実行します。worker には何も届きません。▶️ 確かめる で、worker のログが静かなままなのを見ます。worker に頼むには、チャンク3 の `.delay()` が要ります。
+
+</details>
+
+**🎯 書くもの**: `apps/api/src/catalog/` に新しいファイル `tasks.py` を作る。Celery の仕事 `make_thumbnail` を1つ書く。商品の番号（`product_id`）を受け取り、「商品 ◯ のメモを受け取った」という文字を返す。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `from config.celery import app` | フロム コンフィグ ドット セロリ インポート アップ | P4-6a で作った Celery アプリ（受付箱の場所を知っている）を借りてくる | 無いと、次の行の `app` が分からず `NameError` |
+| `@app.task` | アット アップ ドット タスク（**デコレータ**、decorator） | すぐ下の関数を「Celery の仕事（task）」として登録する。登録すると、関数に `.delay()` などの道具が付く | 消すと、ただの関数に戻る。`.delay()` が無くなる（🧪 で確かめる） |
+| `def make_thumbnail(product_id):` | デフ（関数定義） | 仕事の名前と、受け取るもの（商品の番号）を決める | 仕事の本当の名前は、ファイルの場所も含めて `catalog.tasks.make_thumbnail` になる |
+| `return f"商品 {product_id} のメモを受け取った"` | リターン、エフ文字列（**f-string**） | 仕事の結果として、文字を返す。`{product_id}` の所に番号が入る | 今日は返すだけ。P4-6f で、ここを「画像を縮める」に入れ替える |
+
+**✍️ 自分で書く**（はじめての形なので、下を見ながら**手で打ちます**。コピペはしません）
+
+```python
+from config.celery import app
+
+
+@app.task
+def make_thumbnail(product_id):
+    return f"商品 {product_id} のメモを受け取った"
+```
+
+<details><summary>💡 補足: Django の解説でよく見る <code>@shared_task</code> を使わない理由</summary>
+
+Celery の Django 向けの説明では、`from celery import shared_task` と `@shared_task` もよく出てきます。ただし `@shared_task` を使うときは、別に `config/__init__.py` にも1行書く必要があります。その1行が無いまま `.delay()` を呼ぶと、api は受付箱の場所を知らない Celery を使ってしまいます。
+
+```text
+kombu.exceptions.OperationalError: [Errno 111] Connection refused
+```
+
+✅ 検証済み: 2026-11-18（`@shared_task` に変えて、`config/__init__.py` は空のままで画像を送った）
+
+この教材では、書くファイルを減らすために、`config.celery` の `app` を**名指しで**使う `@app.task` にしました。Celery の公式チュートリアル（First Steps）と同じ書き方です。
+
+</details>
+
+**▶️ 確かめる**: api の箱の中で、ふつうの関数として呼んでみます。別のタブ（tmux のペイン）で worker のログを流しておくと、worker が**何もしない**ことも見えます。
+
+```bash
+docker compose logs -f --since 1m worker
+```
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py shell -c "from catalog.tasks import make_thumbnail; print(make_thumbnail.name); print(make_thumbnail(1))"
+```
+
+```text
+1 object imported automatically (use -v 2 for details).
+
+catalog.tasks.make_thumbnail
+商品 1 のメモを受け取った
+```
+
+✅ 検証済み: 2026-11-18（1行目は Django の shell が毎回出すお知らせ。気にしなくてよい）
+
+2行目の `catalog.tasks.make_thumbnail` が、この仕事の**本当の名前**です。3行目の答えは、api の箱がその場で出しました。worker のログには何も出ません。
+
+**🔎 答えの見つけ方**: 「この関数は Celery の仕事として登録できているか」は、`.name` を表示してみる。仕事なら `catalog.tasks.make_thumbnail` のような名前が出る。ただの関数なら `AttributeError` になる。
+
+**📖 しくみ**
+
+- **何をしているか**: `make_thumbnail` という関数を作り、`@app.task` で「Celery の仕事」に変えました。
+- **なぜ必要か**: worker が受付箱からメモを取り出したとき、メモには「`catalog.tasks.make_thumbnail` を、引数 `1` でやって」としか書いてありません。worker はその名前で**仕事の中身**を探します。中身を書いておく場所が、この `tasks.py` です。
+- **どういう原理で動くか**: Python がこのファイルを読むと、まず `make_thumbnail` 関数ができます。すぐに `@app.task` が働き、**Celery アプリ**（`config.celery` の `app`）が、この関数を自分の**仕事の名簿**に `catalog.tasks.make_thumbnail` という名前で載せます。同時に、関数に `.delay()` などの道具を付けます。ふつうに `make_thumbnail(1)` と呼べば、今いる箱でそのまま動きます。
+
+> 📇 **タスク** — 正式名称: **task**（Celery の用語）
+> かみくだくと: worker に任せる**仕事1つ分**。中身はふつうの Python の関数。
+> 似た言葉との違い: worker = 仕事を**やる人**（箱）。task = やる**仕事の中身**。
+> この教材では: `catalog.tasks.make_thumbnail`（今日は「受け取った」と返すだけ。P4-6f でサムネイルを作る）
+
+---
+
+### チャンク2: worker に仕事の名簿を作らせる（`apps/api/src/config/celery.py`）— 地図の②
+
+**このチャンクの目的**: worker が起動するとき、`tasks.py` を**自分で探して**、仕事を覚えるようにする。
+
+**🤔 先に考える**: いま、`tasks.py` はもう `src` の中にあります。worker は同じ `src` を写しています。ここで worker を起動し直したら、worker は `make_thumbnail` を**知っている**と思いますか？
+A. 知っている　B. 知らない
+
+<details><summary>答え</summary>
+
+**B** です。ファイルが**ある**ことと、worker がそのファイルを**読んだ**ことは別です。worker は起動のとき、言われたファイルしか読みません。`tasks.py` を読めとは、まだ誰も言っていません。✅ 検証済み（2026-11-18）
+
+```bash
+docker compose restart worker
+docker compose logs --since 1m worker
+```
+
+```text
+[tasks]
+
+
+[2026-11-18 05:52:30,594: INFO/MainProcess] Connected to redis://:**@redis:6379/1
+```
+
+起動のお知らせの `[tasks]`（知っている仕事の一覧）の下が、**空っぽ**です。
+
+</details>
+
+**🎯 書くもの**: `apps/api/src/config/celery.py` のいちばん下（`app.config_from_object(...)` の行のすぐ下）に1行足す。Celery アプリに「Django のアプリ（`catalog` など）の中の `tasks.py` を、自分で探して読んで」と頼む。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+`app.autodiscover_tasks()`
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `app` | アップ | P4-6a で作った Celery アプリ | — |
+| `.autodiscover_tasks` | オート ディスカバー タスクス（**autodiscovery**、自動で見つける） | `settings.py` の `INSTALLED_APPS` に書いた Django アプリを1つずつ見て、その中の `tasks.py` を読み込む | 無いと、worker は `tasks.py` を読まない。メモが届いても「その仕事は知らない」と捨てる |
+| `()` | かっこ（呼び出し） | 何も渡さないと「`tasks.py` という名前のファイルを探す」 | — |
+
+**✍️ 自分で書く**（1行なので、上を見ながら**手で打ちます**）
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ app = Celery("config")
+ app.config_from_object("django.conf:settings", namespace="CELERY")
++app.autodiscover_tasks()
+```
+
+</details>
+
+**▶️ 確かめる**: worker を起動し直して、`[tasks]` の下を見ます。
+
+```bash
+docker compose restart worker
+docker compose logs --since 1m worker
+```
+
+```text
+[tasks]
+  . catalog.tasks.make_thumbnail
+
+[2026-11-18 05:53:07,659: INFO/MainProcess] Connected to redis://:**@redis:6379/1
+```
+
+✅ 検証済み: 2026-11-18
+
+`[tasks]` の下に、チャンク1 で作った仕事の名前が出ました。
+
+> ⚠️ **worker は、コードを変えても自分では読み直しません。** api（`runserver`）は保存すると自動で読み直しますが、Celery の worker にはその仕組みがありません。`.py` を変えたら、`docker compose restart worker` で起動し直します。`restart` は「同じ箱を止めて、また起動する」だけで、箱を作り直しません。コードは Mac の `src` を写しているので、起動し直すだけで新しいコードが読まれます。
+
+**🔎 答えの見つけ方**: 「worker がいま知っている仕事の一覧」は、動いている worker に直接たずねると分かります。
+
+```bash
+docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered
+```
+
+```text
+->  celery@6dec9345b1ad: OK
+    * catalog.tasks.make_thumbnail
+
+1 node online.
+```
+
+✅ 検証済み: 2026-11-18（`celery@` の後ろは箱ごとに違う。チャンク2 を書く前に打つと `- empty -` と出る）
+
+`inspect registered` は「登録済みの仕事を調べて」という意味です。起動のログを探さなくても、いつでも打てます。
+
+**📖 しくみ**
+
+- **何をしているか**: Celery アプリに「Django アプリの中の `tasks.py` を探して読み込んで」と頼みました。
+- **なぜ必要か**: worker が起動のとき読むのは、`compose.yaml` の `command:` の `-A config` で言われた `config/celery.py` だけです。`tasks.py` は誰にも読まれないので、仕事の名簿に載りません。名簿に無い仕事のメモが届くと、worker は**捨ててしまいます**。
+- **どういう原理で動くか**:
+  1. **worker** が起動し、`-A config` に従って `config/celery.py` を読む
+  2. `app.autodiscover_tasks()` が「Django の準備ができたら探す」と予約する
+  3. Django の準備ができると、**Celery** が `INSTALLED_APPS` の各アプリ（`catalog` など）の中に `tasks.py` があるかを見て、あれば読み込む
+  4. 読み込まれた `tasks.py` の `@app.task` が働き、`make_thumbnail` が名簿に載る（チャンク1 の 📖）
+  5. 準備が終わると、worker は名簿を `[tasks]` としてログに出し、受付箱を見張り始める
+
+<details><summary>💡 補足: チャンク3 のあとで、この行を消しても動いてしまうことがある</summary>
+
+チャンク3 で `config/api.py` に `from catalog.tasks import make_thumbnail` を書くと、**この行を消しても、worker が仕事を知っている**ことがあります。✅ 検証済み（2026-11-18）
+
+理由: worker は起動のとき、Django の**点検**（system checks。設定にまちがいが無いかを調べる仕組み）を走らせます。点検は URL の設定を読み、URL の設定は `api.py` を読み、`api.py` は `tasks.py` を読みます。こうして、**たまたま**名簿に載るのです。
+
+たまたまに頼ると、ある日 `api.py` を書き換えたとたん、worker が仕事を忘れます。だから `autodiscover_tasks()` で**はっきり**探させます。
+
+</details>
+
+> 📇 **タスクの自動発見** — 正式名称: **autodiscovery**（`autodiscover_tasks()`）
+> かみくだくと: worker が起動のとき、各アプリの `tasks.py` を**自分で探して**仕事を覚える仕組み。
+> 似た言葉との違い: `import` = 1つのファイルを名指しで読む。autodiscovery = 決まった名前（`tasks.py`）のファイルを、アプリ全部から探して読む。
+> この教材では: `catalog/tasks.py` が見つかり、`catalog.tasks.make_thumbnail` が名簿（task registry）に載る。
+
+---
+
+### チャンク3: 画像を保存したら、メモを受付箱に入れる（`apps/api/src/config/api.py`）— 地図の③④
+
+**このチャンクの目的**: あなたが 🛠️ で選んだ **B**（受付箱にメモを入れる）を、本当に書く。
+
+**🤔 先に考える**: チャンク1 では `make_thumbnail(1)` と**ふつうに**呼びました。今度は `make_thumbnail.delay(1)` と、`.delay` を付けて呼びます。仕事をするのは A と B のどちらだと思いますか？
+A. api の箱　B. worker の箱
+
+<details><summary>答え</summary>
+
+**B** です。`.delay()` は、その場では仕事を**しません**。代わりに「この仕事を、この引数でやって」という**メモ**を作り、受付箱に入れるだけです。仕事をするのは、受付箱を見張っている worker です。
+
+</details>
+
+**🎯 書くもの**: `apps/api/src/config/api.py` に2行足す。
+
+1. いちばん上の `from catalog.models import Product` のすぐ下に、チャンク1 の仕事を読み込む1行
+2. 画像の窓口の関数の中で、`product.image.save(...)` のすぐ下（`return` の上）に、商品の番号を付けてメモを入れる1行
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `from catalog.tasks import make_thumbnail` | フロム カタログ ドット タスクス インポート | チャンク1 の仕事を api.py で使えるようにする | 無いと、次の行で `NameError` |
+| `make_thumbnail` | — | チャンク1 で `@app.task` を付けた仕事 | — |
+| `.delay` | ディレイ（遅らせる） | 仕事を**今やらず**、メモにして受付箱に入れる。「あとで worker がやる」ので delay | `.delay` を外して `make_thumbnail(product.id)` にすると、api がその場でやってしまう（チャンク1 と同じ） |
+| `(product.id)` | 引数（argument） | メモに書く中身。保存した商品の番号 | 画像そのものは渡さない。worker は倉庫 `media` から読める（🔁 前回の思い出し） |
+
+**✍️ 自分で書く**（はじめての形なので、上を見ながら**手で打ちます**）
+
+```python
+from catalog.tasks import make_thumbnail
+```
+
+```python
+    make_thumbnail.delay(product.id)
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ from catalog.models import Product
++from catalog.tasks import make_thumbnail
+ 
+ api = NinjaAPI()
+```
+
+```diff
+     product = get_object_or_404(Product, id=product_id)
+     product.image.save(image.name, image)
++    make_thumbnail.delay(product.id)
+     return {"status": "saved"}
+```
+
+2行目は、関数の中なので**4つ分の字下げ**が要ります（上の `product.image.save` と左をそろえる）。
+
+</details>
+
+**▶️ 確かめる**: 片方のタブで worker のログを流したまま、もう片方のタブで画像を送ります（`/tmp/sample.jpg` が無ければ、P4-6c チャンク3 の ▶️ のコマンドで作り直します）。
+
+```bash
+docker compose logs -f --since 1m worker
+```
+
+```bash
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+```
+
+```text
+{"status": "saved"}
+```
+
+worker のログに、次の2行が出れば OK です。
+
+```text
+[2026-11-18 05:53:13,460: INFO/MainProcess] Task catalog.tasks.make_thumbnail[34dbdd82-9b89-4208-b258-68ae65b31de8] received
+[2026-11-18 05:53:13,460: INFO/ForkPoolWorker-7] Task catalog.tasks.make_thumbnail[34dbdd82-9b89-4208-b258-68ae65b31de8] succeeded in 0.00022425000000225737s: '商品 1 のメモを受け取った'
+```
+
+✅ 検証済み: 2026-11-18。手元と同じファイルを別の場所に写して確認した（プロジェクト名は `p46e-verify`、イメージ名は `ec-api:p46e`。`curl` は Mac からではなく、front の道の中から api に送った）。`[...]` の中の番号と時刻は、送るたびに変わる
+
+| 部品 | 意味 |
+| --- | --- |
+| `MainProcess` | worker の**受付係**。受付箱からメモを取り出した |
+| `received` | メモを**受け取った** |
+| `[34dbdd82-...]` | メモ1枚ごとに付く**番号**（task id）。`received` と `succeeded` が同じ番号なら、同じメモの話 |
+| `ForkPoolWorker-7` | worker の中の**作業係**の7番。受付係から仕事を渡された |
+| `succeeded in 0.0002s` | 仕事が**終わった**。かかった時間 |
+| `'商品 1 のメモを受け取った'` | チャンク1 の `return` で返した文字 |
+
+**🔎 答えの見つけ方**: 「メモは本当に受付箱を通っているのか」は、**worker を止めて**から送ると見えます。worker が動いていると、メモは一瞬で取り出されて見えないからです。
+
+```bash
+docker compose stop worker
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+docker compose exec redis redis-cli -n 1 LLEN celery
+```
+
+```text
+{"status": "saved"}{"status": "saved"}(integer) 2
+```
+
+（`curl` の返事には改行が無いので、3つの答えが1行につながって見えます）
+
+worker が止まっていても、api はすぐ `saved` と返しました。受付箱の `celery` という場所に、メモが **2枚**たまっています。1枚の中を見てみます。
+
+```bash
+docker compose exec redis redis-cli -n 1 LRANGE celery 0 0
+```
+
+```text
+1) "{\"body\": \"W1sxXSwge30sIHsiY2FsbGJhY2tzIjogbnVsbCwg...\", \"content-encoding\": \"utf-8\", \"content-type\": \"application/json\", \"headers\": {\"lang\": \"py\", \"task\": \"catalog.tasks.make_thumbnail\", \"id\": \"6d9f64ad-6ca8-4845-b720-21769e8283e6\", ... \"argsrepr\": \"(1,)\", ...
+```
+
+（長いので途中を `...` で省いています。`\"` は、文字の中の `"` を表す書き方です）
+
+`"task": "catalog.tasks.make_thumbnail"`（どの仕事か）と `"argsrepr": "(1,)"`（引数は 1）が書いてあります。**メモに書いてあるのは、仕事の名前と引数だけ**です。worker を起動し直すと、たまっていたメモが片付きます。
+
+```bash
+docker compose start worker
+docker compose exec redis redis-cli -n 1 LLEN celery
+```
+
+```text
+(integer) 0
+```
+
+✅ 検証済み: 2026-11-18（起動した worker のログには、`received` と `succeeded` が2組出た）
+
+> 💡 `LLEN` は「リスト（list）の長さ（length）」、`LRANGE celery 0 0` は「リスト `celery` の0番目から0番目まで」を見る Redis の命令です。メモは、Redis の**リスト**（順番つきの並び）に入れられています。`KEYS '*'` で見える `_kombu.binding...` は、Celery が使う道具の印で、気にしなくてよいです。
+
+**📖 しくみ**
+
+- **何をしているか**: 画像を保存したあと、「商品 1 のサムネイルを作って」というメモを受付箱に入れるようにしました。
+- **なぜ必要か**: api が自分で重い仕事をすると、画像を送った人がその間ずっと待たされます。メモを入れるだけなら一瞬で終わり、すぐ `saved` と返せます。worker が止まっていても、メモは受付箱で待っています（🔎 で見たとおり）。
+- **どういう原理で動くか**:
+  1. **api**（Django）が画像を倉庫 `media` に保存する（P4-6c・6d）
+  2. **api** が `make_thumbnail.delay(1)` を呼ぶ。Celery が「`catalog.tasks.make_thumbnail` を引数 `1` で」というメモを JSON で作る
+  3. **Celery**（api の中）が、`settings.py` の `CELERY_BROKER_URL`（P4-6a）を見て、Redis の 1番の部屋のリスト `celery` にメモを入れる。api はここで返事をする
+  4. **worker の受付係**（MainProcess）が、リスト `celery` からメモを取り出す（`received`）
+  5. 受付係が仕事の名簿（チャンク2）で `catalog.tasks.make_thumbnail` を探し、**作業係**（ForkPoolWorker）に渡す
+  6. 作業係が、チャンク1 の関数を引数 `1` で実行する（`succeeded`）
+
+> 📇 **メッセージ** — 正式名称: **message**（task message）
+> かみくだくと: 受付箱に入れる**メモ1枚**。「どの仕事を・どの引数で」だけが書いてある。
+> 似た言葉との違い: task = 仕事の**中身**（関数）。message = その仕事を**頼むメモ**。関数そのものは入っていない。
+> この教材では: api が `.delay()` で作り、Redis の 1番の部屋のリスト `celery` に入れる。worker が取り出す。
+
+---
+
+### 🧪 壊してみる
+
+チャンク1 の `@app.task` を外すと、どうなるでしょう。
+
+1. **予想**: `catalog/tasks.py` の `@app.task` の1行だけを消して保存し、画像を送ると、どうなると思いますか？
+   A. いつもどおり `saved` が返り、worker が仕事をする　B. api がエラーになる
+2. **実行**: `@app.task` の行を消して保存し、送ります。
+
+   ```bash
+   curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+   docker compose logs --since 1m api
+   ```
+
+3. **見る**: api のログの最後のほうに、次が出ます。
+
+   ```text
+     File "/app/src/config/api.py", line 56, in uploada_image
+       make_thumbnail.delay(product.id)
+       ^^^^^^^^^^^^^^^^^^^^
+   AttributeError: 'function' object has no attribute 'delay'
+   Internal Server Error: /api/products/1/image
+   "POST /api/products/1/image HTTP/1.1" 500 348
+   ```
+
+   ✅ 検証済み: 2026-11-18（`line 56` の数字と関数の名前は、あなたの `api.py` の書き方で変わる）
+
+   部品に分けて読みます。
+
+   | 部品 | 意味 |
+   | --- | --- |
+   | `File "/app/src/config/api.py", line 56` | api.py の 56 行目（チャンク3 で書いた行）で止まった |
+   | `AttributeError` | 「その**道具**（attribute）は無い」というエラー |
+   | `'function' object` | `make_thumbnail` が、**ただの関数**になっている |
+   | `has no attribute 'delay'` | ただの関数には `.delay` という道具が付いていない |
+   | `500` | api が「中でエラーが起きた」と返した |
+
+   チャンク1 の分解表の「`@app.task` を消すと `.delay()` が無くなる」と同じです。`.delay()` は Python の関数にもともとある道具ではなく、`@app.task` が**後から付けた**道具でした。
+
+   > ⚠️ 画像の保存（`product.image.save`）は、エラーの**前の行**なので、終わっています。倉庫には画像が入り、メモだけが入らなかった状態です。
+
+4. **元に戻す**: `@app.task` を戻して保存します。worker は自分では読み直さないので（チャンク2）、`docker compose restart worker` で起動し直してから、もう一度送り、worker のログに `succeeded` が出ることを確かめます。
+
+### 🐳 Docker の中の図（後）
+
+動く図のページ（`docs/visual/docker-inside.html`）の **「6e」** のボタンを押し、**api の箱をクリック**してみてください。右に出る説明に、今日書いた `.delay()` があります。次に **worker の箱**をクリックして、知っている仕事に `make_thumbnail` があることを確かめます。
+
+> 🗺️ 全体の地図（`docs/02-system-map.md`）の「🔎 調べ方の地図」と「つまずきメモ」にも、今日のコマンドを書き足しました。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。各行の右に「なぜ」を一言ずつ書くのがポイントです。
+
+```text
+① catalog/＿＿＿＿.py   仕事の中身を書く。@＿＿＿＿＿＿ を付ける
+                         なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+② config/celery.py      app.＿＿＿＿＿＿＿＿＿＿＿() を足す
+                         なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+③ config/api.py         画像を保存したら make_thumbnail.＿＿＿＿＿(product.id)
+                         なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+        │
+        ▼
+   Redis の ＿＿番の部屋の、リスト ＿＿＿＿＿＿ にメモが入る
+        │
+        ▼
+④ worker の ＿＿＿＿係がメモを取り出し（received）、＿＿＿＿係が仕事をする（succeeded）
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+① catalog/tasks.py      仕事の中身を書く。@app.task を付ける
+                         なぜ: worker がメモの名前から、仕事の中身を探せるようにするため
+② config/celery.py      app.autodiscover_tasks() を足す
+                         なぜ: worker が起動のとき tasks.py を読み、仕事の名簿に載せるため
+③ config/api.py         画像を保存したら make_thumbnail.delay(product.id)
+                         なぜ: api が自分で仕事をせず、すぐ返事できるようにするため
+        │
+        ▼
+   Redis の 1番の部屋の、リスト celery にメモが入る
+        │
+        ▼
+④ worker の受付係がメモを取り出し（received）、作業係が仕事をする（succeeded）
+```
+
+「なぜ」は、言い方がちがっても、意味が合っていれば正解です。埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。最後に、動く図のページの「6e」と見比べます。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「worker に頼むには worker を直接呼ぶと思っていたけど、実はメモを受付箱に置いておくだけだった」
+
+### ✅ できるようになったこと
+
+- [ ] `make_thumbnail(1)` と `make_thumbnail.delay(1)` で、仕事をする箱がどう違うかを説明できる
+- [ ] worker が仕事を知らないとき、`[tasks]` のログや `inspect registered` で確かめられる
+- [ ] worker を止めて送ったら、メモが受付箱にたまることを、打つ前に予想できる
+
+**残った問い**: worker にメモが届くようになった。でも今の仕事は「受け取った」と返すだけで、サムネイルはまだ作っていない。**worker は倉庫の画像をどうやって開いて、小さくして、どこに保存すればいいのか？**
+
+---
+▶ **次**: P4-6f サムネイルを作る（まだ作っていません。P4-6e が終わったら作ります）
 
 ---
 
