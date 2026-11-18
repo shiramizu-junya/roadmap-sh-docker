@@ -4,6 +4,7 @@ from django.shortcuts import get_object_or_404
 from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
 
 from catalog.models import Product
+from catalog.tasks import make_thumbnail
 
 api = NinjaAPI()
 cart_store = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
@@ -52,4 +53,5 @@ def add_cart_item(request, item: CartItemIn, cart_id: str = Header(alias="X-Cart
 def uploada_image(request, product_id: int, image: File[UploadedFile]):
     product = get_object_or_404(Product, id=product_id)
     product.image.save(image.name, image)
+    make_thumbnail.delay(product.id)
     return {"status": "saved"}
