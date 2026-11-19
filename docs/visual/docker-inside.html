@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>EC の Docker の中</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -223,11 +224,14 @@ const STEPS = [
     q: "「画像が届いた。サムネイルを作って」を、api はどうやって worker に伝えるのか？",
     changes: ["仕事（task）make_thumbnail を catalog/tasks.py に書いた", "worker が起動のとき tasks.py を探して、仕事を覚える（autodiscover_tasks）", "api が画像を保存したら、.delay() でメモを 1番の部屋に入れる", "worker がメモを取り出して仕事をする（received → succeeded）"],
     hl: ["w-memo", "memo", "room1", "api-delay", "worker-task", "w-watch"] },
+  { id: "p4-6f", tag: "6f", title: "サムネイルを作る",
+    q: "worker は倉庫の画像をどうやって開いて、小さくして、どこに保存すればいいのか？",
+    changes: ["worker が db から商品を読み、倉庫 media の元画像を Pillow で開く", "db の商品の表に thumbnail 列を足した（migrate は api から1回）", "縦横 200 以内に縮めて /app/media/thumbs/ に保存し、thumbnail 列に場所を書く（あなたが B を選んだ）", "worker が失敗しても api は saved を返す。失敗は worker のログにだけ出る"],
+    hl: ["w-worker-db", "worker-thumb", "db-thumb", "media-thumbs", "w-worker-media"] },
 ];
 // 読み手が終えたステップ（成長の記録の数に使う）
-const DONE_UNTIL = "p4-6e";
+const DONE_UNTIL = "p4-6f";
 const FUTURE = [
-  { tag: "6f", title: "サムネイルを作る" },
   { tag: "6g", title: "画面に出す" },
   { tag: "6h", title: "止めるとき待たせる" },
 ];
@@ -241,10 +245,12 @@ const INFO = {
   front: { kind: "道（ネットワーク）", name: "front", formal: "network", plain: "画面（web）と窓口（api）が話す道。", detail: "同じ道にいる箱どうしだけが、サービス名で呼び合える（名前解決 / DNS）。", cmd: "docker network inspect roadmap-sh-docker_front --format '{{range .Containers}}{{.Name}} {{end}}'" },
   back: { kind: "道（ネットワーク）", name: "back", formal: "network", plain: "裏側の道。api・worker・db・redis がいる。", detail: "web は入れない。話す必要のない箱どうしをつながないようにする考え方を、ネットワーク分離（network segmentation）と呼ぶ。", cmd: "docker network inspect roadmap-sh-docker_back --format '{{range .Containers}}{{.Name}} {{end}}'" },
   "db-data": { kind: "倉庫", name: "db-data", formal: "named volume（名前付きボリューム）", plain: "db のデータを置く倉庫。箱を消しても残る。", detail: "db の /var/lib/mysql につながっている。", cmd: "docker volume ls --filter name=roadmap-sh-docker" },
-  media: { kind: "倉庫", name: "media", formal: "named volume（名前付きボリューム）", plain: "画像を置く倉庫。api と worker の両方の /app/media につながっている。", detail: "画像はコードではなくデータなので、Mac のフォルダではなく倉庫に置く。本番のサーバーにも Mac は無い。", cmd: "docker compose exec api sh -c 'mount | grep /app/'" },
+  media: { kind: "倉庫", name: "media", formal: "named volume（名前付きボリューム）", plain: "画像を置く倉庫。api と worker の両方の /app/media につながっている。", detail: "画像はコードではなくデータなので、Mac のフォルダではなく倉庫に置く。本番のサーバーにも Mac は無い。6f から、products/ に元の画像（api が書く）、thumbs/ にサムネイル（worker が書く）が入る。片方が書いたものは、もう片方の箱からも見える。", cmd: "docker compose exec api ls /app/media/thumbs/" },
   delay: { kind: "api のコード", name: "make_thumbnail.delay(product.id)", formal: "Task.delay()（Celery）", plain: "仕事を今やらず、「この仕事を、この引数で」というメモにして受付箱に入れる。", detail: "api は画像を保存したあとにこれを呼び、すぐ saved と返す。.delay を外して make_thumbnail(product.id) と呼ぶと、api がその場で仕事をしてしまう。.delay は @app.task が関数に付けた道具なので、@app.task を消すと AttributeError: 'function' object has no attribute 'delay' になる。", cmd: "docker compose logs --since 1m api" },
   task: { kind: "worker の仕事", name: "catalog.tasks.make_thumbnail", formal: "task（Celery）", plain: "worker に任せる仕事1つ分。中身はふつうの Python の関数に @app.task を付けたもの。", detail: "worker は起動のとき、config/celery.py の app.autodiscover_tasks() で各アプリの tasks.py を探し、仕事の名簿（task registry）に載せる。名簿に無い仕事のメモが来ると「Received unregistered task」と言って捨てる。worker はコードを自分で読み直さないので、.py を変えたら docker compose restart worker。", cmd: "docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered" },
   memo: { kind: "受付箱に入るもの", name: "メモ", formal: "message（task message）", plain: "受付箱に入れるメモ1枚。「どの仕事を・どの引数で」だけが書いてある。画像そのものは入っていない。", detail: "Redis の 1番の部屋の、リスト celery に JSON で入る。worker が動いていると一瞬で取り出されるので、worker を止めて送ると、たまる様子が見える。", cmd: "docker compose exec redis redis-cli -n 1 LLEN celery" },
+  thumbjob: { kind: "worker の仕事の中身", name: "make_thumbnail（6f）", formal: "Pillow の Image.open() / Image.thumbnail()、Django の ContentFile と FieldFile.save()", plain: "db から商品を読み、倉庫の元画像を開いて縦横 200 以内に縮め、thumbs/ に保存して、db に場所を書く。", detail: "worker は back の道で db と話せる（.env の DB_HOST=db）。元画像は倉庫 media にあるので開ける。worker から倉庫 media を外すと FileNotFoundError で失敗するが、api はメモを入れたらすぐ返事をするので saved を返したまま。失敗は worker のログ（ERROR と Traceback）にだけ出る。", cmd: "docker compose logs --since 1m worker" },
+  thumbcol: { kind: "db の列", name: "catalog_product.thumbnail", formal: "ImageField（db では varchar(100)）", plain: "サムネイルの場所（例: thumbs/1.jpg）を書く文字の列。画像そのものは入っていない。", detail: "models.py に1行足し、makemigrations → migrate を api から1回打って作った。migrate の前に api だけ新しい models.py を読むと、Unknown column 'catalog_product.thumbnail' で 500 になる。", cmd: "docker compose exec db mysql -uec -pec-pass ec -e \"SELECT id, image, thumbnail FROM catalog_product\"" },
   "redis-none": { kind: "倉庫", name: "（redis には倉庫なし）", formal: "—", plain: "redis の中身は箱の中にしか無い。", detail: "11/15 に cart:test を入れてから箱を作り直し、消えることを確かめた。", cmd: "docker compose exec redis redis-cli -n 0 KEYS '*'" },
   src: { kind: "Mac のフォルダ", name: "apps/api/src", formal: "bind mount（バインドマウント）", plain: "Mac で書いたコードを、そのまま箱の中の /app/src に見せる。", detail: "api と worker の両方に写している。コードは「人が Mac で書くもの」なので、倉庫ではなく Mac のフォルダを写す。", cmd: "docker compose exec api sh -c 'mount | grep /app/src'" },
   ports: { kind: "窓口（ポート）", name: "ports", formal: "port publishing（ポート公開）", plain: "Mac の番号と、箱の中の番号をつなぐ入り口。", detail: "127.0.0.1 は「この Mac からだけ」、0.0.0.0 は「どこからでも（同じ Wi-Fi の他のパソコンからも）」。", cmd: "docker compose ps --format '{{.Service}}  {{.Ports}}'" },
@@ -266,6 +272,8 @@ const GROWTH = [
     can: ["画像を Mac のフォルダではなく倉庫に置く理由を、コードとデータの違いで説明できる", "bind mount と named volume を、見た目で見分けられる", "直し方を、教材の答えを見る前に自分で選べた（C）"] },
   { tag: "6e", title: "メモを受付箱に入れ、worker に届ける", when: "11/18",
     can: ["make_thumbnail(1) と .delay(1) で、仕事をする箱の違いを説明できる", "worker を止めて送るとメモが受付箱にたまることを予想し、2 → 0 で確かめた", "@app.task が .delay() を付け足していることを、エラーから言えた", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
+  { tag: "6f", title: "サムネイルを作る", when: "11/19",
+    can: ["worker が db から「画像の場所」、倉庫から「画像そのもの」を読むことを説明できる", "Unknown column が出たら、migrate 忘れだと分かる", "worker が作ったサムネイルが api から見える理由を、倉庫 media で説明できる", "api が worker の失敗に気づかない理由を、非同期で説明できる", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
 ];
 
 const LOOKUP = [
@@ -287,6 +295,9 @@ const LOOKUP = [
   ["worker にメモが届いて、仕事が終わったか", "docker compose logs -f --since 1m worker（received と succeeded）", "p4-6e"],
   ["受付箱にたまっているメモの枚数", "docker compose exec redis redis-cli -n 1 LLEN celery", "p4-6e"],
   ["コードを変えたあと worker に読み直させる", "docker compose restart worker", "p4-6e"],
+  ["worker から db に届くか（worker の中で1行試す）", "docker compose exec worker .venv/bin/python src/manage.py shell -c \"...\"", "p4-6f"],
+  ["db の商品の行に何が書かれたか", "docker compose exec db mysql -uec -pec-pass ec -e \"SELECT id, image, thumbnail FROM catalog_product\"", "p4-6f"],
+  ["箱の中のファイルを Mac で見る", "docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg → open /tmp/thumb.jpg", "p4-6f"],
 ];
 
 let stepIdx = STEPS.length - 1;
@@ -337,11 +348,13 @@ function svg(i) {
   ];
   if (has(4)) workerB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "worker-media" });
   if (has(5)) workerB.push({ dot: "dot-conf", t: "仕事: make_thumbnail", code: true, k: "worker-task", info: "task" });
+  if (has(6)) workerB.push({ dot: "dot-conf", t: "開く → 縮める → thumbs/ に保存", code: true, k: "worker-thumb", info: "thumbjob" });
 
   const redisB = [{ dot: "dot-conf", t: "0番の部屋: カート", k: "room0" }];
   if (has(1)) redisB.push({ dot: "dot-conf", t: "1番の部屋: 受付箱", k: "room1" });
   const dbB = [{ dot: "dot-conf", t: "商品（catalog_product）" }];
   if (has(3)) dbB.push({ dot: "dot-conf", t: "image 列 = 画像のパス", k: "db-col" });
+  if (has(6)) dbB.push({ dot: "dot-conf", t: "thumbnail 列 = パス", k: "db-thumb", info: "thumbcol" });
 
   const apiH = 52 + apiB.length * 17;
   return `
@@ -396,6 +409,9 @@ function svg(i) {
          <text x="680" y="247" text-anchor="middle">メモ（.delay）</text>
        </g>` : ""}
 
+    ${has(6) ? `<path class="${wcls("w-worker-db", "app")}" d="M528 470 C 590 470, 640 470, 650 ${342 + 52 + dbB.length * 17}" marker-end="url(#ah)" marker-start="url(#ah)"/>
+       <text class="port ${H.has("w-worker-db") ? "hl-text" : ""}" x="664" y="${342 + 52 + dbB.length * 17 + 30}">商品を読む・場所を書く</text>` : ""}
+
     ${box("web", 50, 196, 190, 86, "web", null, [{ dot: "dot-src", t: "画面（React）" }])}
     ${box("api", 316, 404 - apiH, 212, apiH, "api", has(2) ? { t: "ec-api:dev", k: "api-image" } : null, apiB)}
     ${has(2) ? box("worker", 316, 448, 212, 52 + workerB.length * 17, "worker", { t: "ec-api:dev" }, workerB) : ""}
@@ -420,7 +436,7 @@ function svg(i) {
       <g class="store clickable ${cls("media")}" data-key="media" tabindex="0" role="button" aria-label="倉庫 media">
         <rect class="glow" x="174" y="620" width="182" height="72" rx="12"/>
         <rect x="180" y="626" width="170" height="60" rx="8"/>
-        <text x="194" y="650">倉庫 media</text><text class="sub" x="194" y="672">/app/media（画像）</text>
+        <text x="194" y="650">倉庫 media</text><text class="sub ${H.has("media-thumbs") ? "hl-text" : ""}" x="194" y="672">${has(6) ? "products/・thumbs/" : "/app/media（画像）"}</text>
       </g>` : ""}
     ${i === 3 ? `<text class="port hl-text" x="40" y="660">画像は api の箱の中だけ。worker からは見えない</text>` : ""}
   </svg>`;
@@ -465,7 +481,7 @@ function renderGrowth() {
     <article class="card"><span class="when">${esc(g.tag)} ・ ${esc(g.when)}</span><h3>${esc(g.title)}</h3>
       <ul>${g.can.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
       ${g.note ? `<blockquote>${esc(g.note)}</blockquote>` : ""}</article>`).join("")
-    + `<article class="card next"><span class="when">次</span><h3>6f サムネイルを作る</h3><p style="margin:0">worker が倉庫 media の画像を開いて小さくし、サムネイルとして保存する。</p></article>`;
+    + `<article class="card next"><span class="when">次</span><h3>6g 画面にサムネイルを出す</h3><p style="margin:0">倉庫の中のサムネイルを、ブラウザ（web）から見えるようにする。</p></article>`;
 }
 
 function renderLookup() {

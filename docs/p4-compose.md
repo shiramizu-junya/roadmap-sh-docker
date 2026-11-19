@@ -4162,7 +4162,649 @@ docker compose exec redis redis-cli -n 1 LLEN celery
 **残った問い**: worker にメモが届くようになった。でも今の仕事は「受け取った」と返すだけで、サムネイルはまだ作っていない。**worker は倉庫の画像をどうやって開いて、小さくして、どこに保存すればいいのか？**
 
 ---
-▶ **次**: P4-6f サムネイルを作る（まだ作っていません。P4-6e が終わったら作ります）
+▶ **次**: P4-6f サムネイルを作る
+
+---
+
+## P4-6f: サムネイルを作る
+
+**❓ この回の問い**: 前回（P4-6e）で、worker にメモが届くようになった。でも worker の仕事は「受け取った」と返すだけで、サムネイルはまだ無い。
+→ **worker は倉庫の画像をどうやって開いて、小さくして、どこに保存すればいいのか？**
+
+**作ること / 確かめること**: worker が db から商品を読み、倉庫 `media` の元画像を開いて、縦横 200 以内に縮めたサムネイルを `/app/media/thumbs/` に保存する。db の商品の行に、サムネイルの場所を書く。api の箱からもサムネイルが見えることを確かめる
+**重要度**: 🔴 毎日使う — 「裏方が db と倉庫を読み書きして、重い仕事を片付ける」は、Web アプリの裏側でいつも使う形だから
+**前ステップとの接続**: P4-6e の `make_thumbnail` の中身を、本物の仕事に入れ替える。`compose.yaml` は変えない（🧪 で一時的に変えるだけ）。変えるのは `catalog/tasks.py` と `catalog/models.py`
+
+**P4-6 ぜんたいの地図での位置**: ④（worker が画像を縮めて、サムネイルとして保存する）
+
+### 🔁 前回の思い出し
+
+**問い**: P4-6e で、`make_thumbnail(1)` と `make_thumbnail.delay(1)` は何が違いましたか？ 一言で。
+
+<details><summary>答え</summary>
+
+`make_thumbnail(1)` は、呼んだ箱（api）が**その場で**仕事をします。`.delay(1)` は、受付箱に**メモを入れるだけ**で、仕事をするのは worker です。今日書く中身は、`.delay()` で頼まれたとおり、**worker の箱の中で**動きます。
+
+</details>
+
+### 🛠️ 先に自分で決める
+
+教材が答えを出す前に、**あなたがサムネイルの残し方を決めます。** このあとのチャンクは、あなたの選んだ方針の答え合わせとして進みます。
+
+**困りごと**（P4-6e の残った問い）
+
+- worker にメモ（「商品 1 のサムネイルを作って」）が届くようになった
+- でも、縮めた画像を**どこに・どう残すか**が決まっていない。決めないと、P4-6g で画面に出すときに探せない
+
+**🤔 どの残し方を選びますか？** 1つ選んで、理由を一言で書いてください（「分からない」でも大丈夫です）。
+
+| 案 | 残し方 |
+| --- | --- |
+| A | 元の画像を縮めて、**同じファイルに上書きする**。db は変えない |
+| B | 元の画像はそのまま。縮めた画像を**別のファイル**（`thumbs/1.jpg`）に作り、db の商品の行に**新しい列**を足して、その場所を書く |
+| C | 何も残さない。画面に出すたびに、**その場で縮める** |
+
+<details><summary>ヒント</summary>
+
+商品のページでは、大きな画像も見せたいことがあります（拡大表示）。それから、画像を縮めるのは「重い仕事」でした（P4-6e の 🛠️ の C）。
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+この教材は **B** で進めます。
+
+| 案 | 判定 | 理由 |
+| --- | --- | --- |
+| A | ✗ | 元の画像が**二度と戻らない**。大きな画像を見せたくなっても、もう無い |
+| B | ◎ | 元の画像も残る。db の列を見れば、サムネイルの場所が**すぐ分かる**（P4-6c で画像の場所を `image` 列に書いたのと同じ考え方）。縮めるのは1回だけで済む |
+| C | △ 動かせる | 画面を開くたびに重い仕事をすることになる。worker に任せた意味がなくなる |
+
+B のために、今日はチャンク2 で db に列を1つ足します。
+
+</details>
+
+### 🐳 Docker の中の図
+
+動く図のページ（`docs/visual/docker-inside.html`。ブラウザで `open docs/visual/docker-inside.html`）で、**「6e」と「6f」のボタンを交互に押して**比べてください。赤く光るのが今日変わる所です。worker から db への線（商品を読む・サムネイルの場所を書く）と、倉庫 `media` の中の `thumbs/` が増えます。
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の「1枚の地図」に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+curl          ── :8000 どこからでも ──▶ api
+Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
+
+                                        【道 back】 api・worker・db・redis
+                                        api ──▶ db、redis
+                                        api ──▶ redis の 1番にメモを入れる
+DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消えない）
+Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
+                                                0番の部屋: カート / 1番の部屋: 受付箱
+（窓口なし）                            worker ──▶ redis の 1番を見張り、メモが来たら仕事をする
+                                        worker ──▶ db（商品を読む・サムネイルの場所を書く）  ★ 今日
+                                        api・worker ──▶ 倉庫 media（画像。消えない）
+                                                        worker が thumbs/ にサムネイルを書く  ★ 今日
+```
+
+**見てほしいところ**: 今日も**新しい箱・道・倉庫・窓口は増えません。** worker が、P4-6b で決めた `depends_on: db` と back の道を通って、**はじめて db と話します。**
+
+### 🗺️ 今日の地図
+
+```text
+Redis の 1番の部屋（受付箱）から「商品 1 のサムネイルを作って」のメモ（P4-6e）
+        │
+        ▼
+worker の箱  catalog/tasks.py の make_thumbnail
+  ① db から商品 1 を読み、倉庫 media の元画像を開く      … チャンク1（tasks.py）
+  ② db の商品の表に、サムネイルの列を足す                … チャンク2（models.py と migrate）
+  ③ 縦横 200 以内に縮めて thumbs/ に保存し、
+     db の ② の列にその場所を書く                        … チャンク3（tasks.py）
+        │
+        ├──▶ 倉庫 media の /app/media/thumbs/1.jpg   （api の箱からも見える）
+        └──▶ db の catalog_product の thumbnail 列 = "thumbs/1.jpg"
+```
+
+**見てほしいところ**: サムネイルも、P4-6c の画像と同じく**2か所に分かれて**残ります。画像そのものは倉庫 `media` へ、db には**場所の文字だけ**です。
+
+### 6f-0. このステップの初出
+
+**Pillow**: `Image.open()`、`.size`、`.thumbnail()`、`.save()`
+**Django**: `Product.objects.get()`、`ContentFile`、`FieldFile.save()`（`product.thumbnail.save(...)`）
+**Docker**: `docker compose cp`
+
+---
+
+### チャンク1: worker が db と倉庫から材料を集める（`apps/api/src/catalog/tasks.py`）— 地図の①
+
+**このチャンクの目的**: メモに書いてあるのは**商品の番号だけ**（P4-6e）。worker が自分で db から商品を読み、倉庫の元画像を開けることを確かめる。
+
+**🤔 先に考える**: worker は、db（MySQL）と話せると思いますか？
+A. 話せる　B. 話せない
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: 全体の地図（`docs/02-system-map.md` の「② 道（ネットワーク）」）で、worker と db は同じ道にいますか？ worker の `env_file:` には何が入っていましたか？
+
+<details><summary>答え</summary>
+
+**A** です。理由は2つあります。
+
+1. worker と db は、どちらも **back の道**にいます（P4-6b）。同じ道にいれば、`db` という名前で呼べます
+2. worker は api と同じ `apps/api/.env` を受け取っています（`env_file:`、P4-6b）。その中の `DB_HOST=db` などを、`settings.py` が読みます
+
+```bash
+docker compose exec worker printenv DB_HOST
+```
+
+```text
+db
+```
+
+✅ 検証済み: 2026-11-18
+
+</details>
+
+**🎯 書くもの**: `catalog/tasks.py` を、次のように変える。
+
+1. いちばん上に、Pillow の `Image` と、商品のモデル `Product` を読み込む2行を足す
+2. `make_thumbnail` の中で、番号から商品を1つ取り出す。その商品の `image`（元画像）を Pillow で開く
+3. `return` を「商品 ◯ の画像は （横, 縦）」と、画像の大きさを返すように変える
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `from PIL import Image` | フロム ピル インポート イメージ | Pillow（P4-6c で入れた画像の道具）の `Image` を借りる。Pillow は昔の名前 PIL のまま読み込む | 無いと `NameError: name 'Image' is not defined` |
+| `from catalog.models import Product` | — | 商品のモデル（db の表 `catalog_product` の Python 側の姿） | 無いと `NameError` |
+| `Product.objects.get(id=product_id)` | オブジェクツ ドット ゲット（**ORM**、Object-Relational Mapping） | db に「id が ◯ の商品を1つ」とたずね、1行を Python の `Product` として受け取る | 無い番号だと `Product.DoesNotExist` |
+| `Image.open(product.image)` | イメージ ドット オープン | 商品の `image` 列に書いた場所（`products/...jpg`）のファイルを、`MEDIA_ROOT`（`/app/media`）の下から開く | worker に倉庫 `media` が無いと `FileNotFoundError`（🧪 で確かめる） |
+| `img.size` | サイズ | 画像の `(横, 縦)` のピクセル数 | — |
+
+**✍️ 自分で書く**（はじめての形なので、下を見ながら**手で打ちます**。コピペはしません）
+
+```python
+from PIL import Image
+
+from catalog.models import Product
+from config.celery import app
+
+
+@app.task
+def make_thumbnail(product_id):
+    product = Product.objects.get(id=product_id)
+    img = Image.open(product.image)
+    return f"商品 {product_id} の画像は {img.size}"
+```
+
+（`from config.celery import app` と `@app.task`、`def` の行は P4-6e のまま。打つのは、上の2行と、関数の中の3行です）
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
++from PIL import Image
++
++from catalog.models import Product
+ from config.celery import app
+ 
+```
+
+```diff
+ @app.task
+ def make_thumbnail(product_id):
+-    return f"商品 {product_id} のメモを受け取った"
++    product = Product.objects.get(id=product_id)
++    img = Image.open(product.image)
++    return f"商品 {product_id} の画像は {img.size}"
+```
+
+</details>
+
+**▶️ 確かめる**: worker のログを流したまま、画像を送ります。まずは**保存しただけで**送ってみます。
+
+```bash
+docker compose logs -f --since 1m worker
+```
+
+```bash
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+```
+
+```text
+... succeeded in 0.0001s: '商品 1 のメモを受け取った'
+```
+
+**古い答えのまま**です。worker は、コードを変えても自分では読み直さないからです（P4-6e チャンク2 の ⚠️）。worker を起動し直してから、もう一度送ってください（コマンドは自分で思い出して打ちます）。
+
+<details><summary>ヒント: 起動し直すコマンド</summary>
+
+`docker compose restart worker`
+
+</details>
+
+```text
+[2026-11-18 06:57:59,742: INFO/MainProcess] Task catalog.tasks.make_thumbnail[44180ad4-...] received
+[2026-11-18 06:57:59,790: INFO/ForkPoolWorker-7] Task catalog.tasks.make_thumbnail[44180ad4-...] succeeded in 0.046464417000152025s: '商品 1 の画像は (1200, 800)'
+```
+
+✅ 検証済み: Django 5.2 / Pillow 13.0 / MySQL 8.4（2026-11-18。手元と同じファイルを別の場所に写し、プロジェクト名 `p46f-verify` で確認した）
+
+`(1200, 800)` は、P4-6c で作った `/tmp/sample.jpg`（横 1200・縦 800 の薄茶色の四角）の大きさです。worker が、**db** から商品を読み、**倉庫 `media`** から画像を開けました。
+
+**🔎 答えの見つけ方**: 「worker の中で、ある1行が動くか」を仕事より先に試したいときは、worker の箱で Django の shell を開く。
+
+```bash
+docker compose exec worker .venv/bin/python src/manage.py shell -c "from catalog.models import Product; print(Product.objects.get(id=1).image.name)"
+```
+
+```text
+products/s_kQh8c6c.jpg
+```
+
+✅ 検証済み: 2026-11-18（あなたの手元では `products/sample...jpg` のような名前になる）
+
+worker の中で動いた答えが出れば、worker から db に届いています。
+
+**📖 しくみ**
+
+- **何をしているか**: メモに書いてあった番号から、worker が自分で商品を読み、元画像を開きました。
+- **なぜ必要か**: メモに入っているのは「仕事の名前と番号」だけです（P4-6e の 📇 メッセージ）。画像そのものや商品の情報は入っていません。だから worker は、**db と倉庫に取りに行く**必要があります。メモを小さくしておけば、受付箱（Redis）も軽いままです。
+- **どういう原理で動くか**:
+  1. **worker の作業係**が、メモの番号 `1` で `make_thumbnail(1)` を呼ぶ
+  2. **Django**（worker の中）が、`settings.py` の `DB_HOST=db` を見て、back の道で **MySQL** に `SELECT ... WHERE id = 1` を送る
+  3. **MySQL** が商品の行を返す。`image` 列には `products/sample...jpg` という**文字**が入っている
+  4. **Pillow** が、`MEDIA_ROOT`（`/app/media`）＋その文字のファイルを開く。そこは倉庫 `media` なので、api が書いた画像が見える（P4-6d）
+
+> 📇 **Image.open** — 正式名称: Pillow の **`PIL.Image.open()`**
+> かみくだくと: 画像のファイルを開いて、Python で**さわれる画像**にする。
+> 似た言葉との違い: Python の `open()` = ファイルを**ただのバイトの並び**として開く。`Image.open()` = 「これは JPEG で、横 1200・縦 800」と**画像として**読む。
+> この教材では: 倉庫 `media` の元画像を、worker の中で開く。
+
+---
+
+### チャンク2: db にサムネイルの列を足す（`apps/api/src/catalog/models.py`）— 地図の②
+
+**このチャンクの目的**: 🛠️ で選んだ **B**（db に新しい列を足して、サムネイルの場所を書く）のための列を作る。
+
+**🤔 先に考える**: `models.py` に列を1行足して**保存だけ**し、`migrate` を打つ**前に**画像を送ったら、どうなると思いますか？
+A. いつもどおり `saved` が返る　B. api がエラーになる
+
+<details><summary>答え</summary>
+
+**B** です。api（`runserver`）は保存すると**自動で読み直す**ので、api の `Product` はもう「`thumbnail` 列がある」と思っています。でも db の表には、まだその列がありません。api が db に「`thumbnail` 列もちょうだい」とたずねて、db に断られます。
+
+```text
+django.db.utils.OperationalError: (1054, "Unknown column 'catalog_product.thumbnail' in 'field list'")
+"POST /api/products/1/image HTTP/1.1" 500 4201
+```
+
+✅ 検証済み: 2026-11-18（`Unknown column` = 「その列は知らない」。`curl` の答えには長いエラーの全文が出る）
+
+試してみたくなったら、保存したあと `migrate` の前に送ってみてください。`migrate` のあとは、また `saved` に戻ります。
+
+</details>
+
+**🎯 書くもの**: `catalog/models.py` の `image = ...` の行のすぐ下に、`thumbnail` という画像の列を1行足す。置き場は `thumbs/`。画像が無い商品もあるので、空でもよいことにする。
+
+**✍️ 自分で書く**（`ImageField` は P4-6c に続いて2回目なので、穴埋めです）
+
+```python
+    thumbnail = models.___(upload_to="___", blank=___)
+```
+
+<details><summary>ヒント1: 使う部品の名前</summary>
+
+すぐ上の `image = ...` の行と、ほとんど同じです。違うのは置き場のフォルダだけです。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+     description = models.TextField(blank=True)
+     image = models.ImageField(upload_to="products/", blank=True)
++    thumbnail = models.ImageField(upload_to="thumbs/", blank=True)
+ 
+     def __str__(self):
+```
+
+</details>
+
+**▶️ 確かめる**: 設計図（マイグレーション）を作って db に当てます。P4-6c と同じ2つのコマンドです。`___` を埋めて打ちます。
+
+```bash
+docker compose exec ___ .venv/bin/python src/manage.py ___ catalog
+docker compose exec ___ .venv/bin/python src/manage.py ___
+```
+
+<details><summary>答え</summary>
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py makemigrations catalog
+docker compose exec api .venv/bin/python src/manage.py migrate
+```
+
+</details>
+
+```text
+Migrations for 'catalog':
+  src/catalog/migrations/0003_product_thumbnail.py
+    + Add field thumbnail to product
+```
+
+```text
+Operations to perform:
+  Apply all migrations: catalog
+Running migrations:
+  Applying catalog.0003_product_thumbnail... OK
+```
+
+✅ 検証済み: 2026-11-18
+
+> 💡 **migrate は api から1回打てば、worker の分も済みます。** db は1つで、api も worker も同じ db を見ているからです（全体の地図の「② 道」）。設計図のファイル `0003_product_thumbnail.py` も、bind mount で Mac と worker の `src` に同時にできています。
+
+**🔎 答えの見つけ方**: 設計図が db に当たったかは `showmigrations`。`[X] 0003_product_thumbnail` と `X` が付いていればよい（P4-6c と同じ）。どんな SQL になったかは `sqlmigrate`。
+
+```bash
+docker compose exec api .venv/bin/python src/manage.py sqlmigrate catalog 0003
+```
+
+```text
+ALTER TABLE `catalog_product` ADD COLUMN `thumbnail` varchar(100) DEFAULT '' NOT NULL;
+ALTER TABLE `catalog_product` ALTER COLUMN `thumbnail` DROP DEFAULT;
+```
+
+✅ 検証済み: 2026-11-18（`varchar(100)` = 100文字までの**文字の列**。画像そのものではなく、場所の文字が入る）
+
+**📖 しくみ**
+
+- **何をしているか**: 商品の表 `catalog_product` に、サムネイルの場所を書く**文字の列** `thumbnail` を足しました。
+- **なぜ必要か**: P4-6g で画面に出すとき、「商品 1 のサムネイルはどこ？」を db にたずねれば、すぐ分かるようにするためです。フォルダの中を探し回らなくて済みます。
+- **どういう原理で動くか**:
+  1. あなたが `models.py` に1行足す。**api** は保存で読み直すが、**db** はまだ変わらない（🤔 のエラーはこの間に起きる）
+  2. `makemigrations` で、**Django** が差分を `0003_product_thumbnail.py` に書く
+  3. `migrate` で、**Django**（api の箱の中）が `ALTER TABLE ... ADD COLUMN` を **MySQL** に送る
+  4. **MySQL** が列を足す。worker も同じ db を見ているので、worker が起動し直せば新しい列を使える（チャンク3）
+
+---
+
+### チャンク3: 縮めて保存し、場所を db に書く（`apps/api/src/catalog/tasks.py`）— 地図の③
+
+**このチャンクの目的**: チャンク1 で開いた画像を縦横 200 以内に縮め、`thumbs/` に保存して、チャンク2 の列にその場所を書く。
+
+**🤔 先に考える**: サムネイルを保存するのは **worker の箱**です。保存したあと、**api の箱**から `ls /app/media/thumbs/` を打ったら、サムネイルは見えると思いますか？
+A. 見える　B. 見えない
+
+<details><summary>答え</summary>
+
+**A** です。api と worker は、**同じ倉庫 `media`** を `/app/media` につないでいます（P4-6d）。worker が倉庫に書いたものは、api の箱からもそのまま見えます。P4-6d で「api が書いた画像が worker から見える」を確かめたのと、向きが逆なだけです。
+
+</details>
+
+**🎯 書くもの**: `catalog/tasks.py` に5行足す。
+
+1. いちばん上に、Django の `ContentFile` を読み込む1行
+2. `img = Image.open(...)` のすぐ下に、次の4行
+   - 画像を縦横 200 以内に縮める
+   - 中身が空っぽの「メモリの中のファイル」を1つ作る
+   - 縮めた画像を、そのファイルに JPEG で書く
+   - そのファイルを、商品の `thumbnail` に `商品の番号.jpg` という名前で保存する
+
+`return` の行は**変えません**。同じ `img.size` が、縮めたあとの大きさを返すようになります。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `from django.core.files.base import ContentFile` | コンテントファイル | Django の「メモリの中のファイル」を借りる | 無いと `NameError` |
+| `img.thumbnail((200, 200))` | サムネイル（Pillow の `Image.thumbnail()`） | 縦横の比を保ったまま、**どちらも 200 以内**に縮める。`img` そのものを書き換える | `(1200, 800)` は `(200, 133)` になる。もともと小さい画像は**大きくしない**（`(100, 50)` は `(100, 50)` のまま。✅ 検証済み） |
+| `thumb = ContentFile(b"")` | ビー（**bytes** の空っぽ） | 中身が空のファイルを、**ディスクではなくメモリの中**に作る | — |
+| `img.save(thumb, format="JPEG")` | セーブ、フォーマット | 縮めた画像を JPEG の形にして、`thumb` に書く。ファイルの名前が無いので、形は `format=` で教える | `format=` を消すと `ValueError: unknown file extension:`（名前の拡張子から形を決められない。✅ 検証済み） |
+| `product.thumbnail.save(f"{product_id}.jpg", thumb)` | **FieldFile.save()** | `thumbs/1.jpg` として**倉庫に書き**、商品の行の `thumbnail` 列に `"thumbs/1.jpg"` と**書いて db に保存**する。1行で2つの仕事をする | 同じ名前がもうあると、Django が `1_aB3xYz9.jpg` のように後ろに文字を足して、別の名前にする |
+
+**✍️ 自分で書く**（はじめての形なので、上を見ながら**手で打ちます**）
+
+```python
+from django.core.files.base import ContentFile
+```
+
+```python
+    img.thumbnail((200, 200))
+    thumb = ContentFile(b"")
+    img.save(thumb, format="JPEG")
+    product.thumbnail.save(f"{product_id}.jpg", thumb)
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
++from django.core.files.base import ContentFile
+ from PIL import Image
+ 
+```
+
+```diff
+     product = Product.objects.get(id=product_id)
+     img = Image.open(product.image)
++    img.thumbnail((200, 200))
++    thumb = ContentFile(b"")
++    img.save(thumb, format="JPEG")
++    product.thumbnail.save(f"{product_id}.jpg", thumb)
+     return f"商品 {product_id} の画像は {img.size}"
+```
+
+</details>
+
+**▶️ 確かめる**: 今度は、送る**前に**自分で worker を起動し直します（チャンク1 で見たとおり、起動し直さないと古いコードのままです。コマンドは自分で思い出して打ちます）。そのあと画像を送ります。
+
+やることは、チャンク1 の ▶️ と同じ3つです: ① worker を起動し直す → ② worker のログを流す → ③ 別のタブで画像を送る。ログに下のような `succeeded` の行が出れば OK です。
+
+<details><summary>ヒント: 3つのコマンド（チャンク1 の ▶️ に同じものがある）</summary>
+
+```bash
+docker compose restart worker
+docker compose logs -f --since 1m worker
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+```
+
+</details>
+
+```text
+[2026-11-18 06:58:33,100: INFO/MainProcess] Task catalog.tasks.make_thumbnail[a761d1a0-...] received
+[2026-11-18 06:58:33,116: INFO/ForkPoolWorker-7] Task catalog.tasks.make_thumbnail[a761d1a0-...] succeeded in 0.01519662500004415s: '商品 1 の画像は (200, 133)'
+```
+
+✅ 検証済み: 2026-11-18
+
+`(1200, 800)` が `(200, 133)` になりました。次に、🤔 の答え合わせです。**api の箱**からサムネイルを探します。
+
+```bash
+docker compose exec api ls -l /app/media/thumbs/
+```
+
+```text
+total 4
+-rw-r--r-- 1 root root 1096 Nov 18 12:58 1.jpg
+```
+
+✅ 検証済み: 2026-11-18（1096 バイト。元の画像は約 15,000 バイトだった。何度も送ると `1_aB3xYz9.jpg` のような名前が増えていく）
+
+worker が書いたファイルが、api の箱から見えました。
+
+**🔎 答えの見つけ方**: 「db に何が書かれたか」は、商品の行を直接見る。
+
+```bash
+docker compose exec db mysql -uec -pec-pass ec -e "SELECT id, image, thumbnail FROM catalog_product"
+```
+
+```text
+id	image	thumbnail
+1	products/s_kQh8c6c.jpg	thumbs/1_YNCivJp.jpg
+```
+
+✅ 検証済み: 2026-11-18（検証では送るファイルの名前が `s.jpg` だったので `s_...` になっている。あなたの手元では `sample...` になる。最初に `mysql: [Warning] Using a password on the command line interface can be insecure.` という注意が出る。パスワードをコマンドに書いたことへの注意で、練習用なので気にしなくてよい）
+
+「サムネイルを**目で見たい**」ときは、箱の中のファイルを Mac に写して開く。
+
+```bash
+docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg
+file /tmp/thumb.jpg
+open /tmp/thumb.jpg
+```
+
+```text
+/tmp/thumb.jpg: JPEG image data, JFIF standard 1.01, ... 200x133, components 3
+```
+
+✅ 検証済み: 2026-11-18（`docker compose cp` は「箱の中のファイルを Mac にコピーする」。`open` で Mac のプレビューが開き、小さな薄茶色の四角が見える）
+
+**📖 しくみ**
+
+- **何をしているか**: 画像を縮めて、倉庫の `thumbs/` に保存し、db の `thumbnail` 列にその場所を書きました。
+- **なぜ必要か**: 一覧の画面に大きな画像を何枚も出すと、表示が遅くなります。小さなサムネイルを**1回だけ**作っておけば、画面はそれを使えます（P4-6g）。
+- **どういう原理で動くか**:
+  1. **Pillow** が、メモリの中の画像を `(200, 133)` に縮める（ディスクにはまだ何も書いていない）
+  2. **Pillow** が、縮めた画像を JPEG の形にして、メモリの中のファイル `thumb` に書く
+  3. **Django** が `MEDIA_ROOT` ＋ `upload_to="thumbs/"` ＋ `1.jpg` から `/app/media/thumbs/1.jpg` を組み立て、`thumbs/` フォルダが無ければ作って、ファイルを書く。そこは倉庫 `media` なので、api の箱からも見える
+  4. **Django** が、商品の行の `thumbnail` 列に `"thumbs/1.jpg"` を入れて、**MySQL** に `UPDATE` を送る
+
+<details><summary>💡 補足: PNG の画像を送ると失敗することがある</summary>
+
+透明な部分を持つ PNG（Pillow では「RGBA」という形）は、そのまま JPEG にできません。
+
+```text
+OSError: cannot write mode RGBA as JPEG
+```
+
+✅ 検証済み: Pillow 13.0（2026-11-18）
+
+この教材では JPEG だけを送るので、扱いません。本物のアプリでは、縮める前に `img = img.convert("RGB")` で形をそろえることがよくあります。
+
+</details>
+
+> 📇 **ContentFile** — 正式名称: Django の **`django.core.files.base.ContentFile`**
+> かみくだくと: ディスクではなく**メモリの中**にある、Django 用のファイル。
+> 似た言葉との違い: P4-6c の `UploadedFile` = 送られてきたファイル。`ContentFile` = プログラムの中で**自分で作った**中身を、ファイルとして扱うための入れ物。
+> この教材では: 縮めた画像をいったん入れておき、`product.thumbnail.save(...)` に渡す。
+
+---
+
+### 🧪 壊してみる
+
+worker から倉庫 `media` を外すと、どうなるでしょう。
+
+1. **予想**: `compose.yaml` の **worker の** `volumes:` から `- media:/app/media` の1行だけを消して、`docker compose up -d worker` で worker を作り直します。画像を送ったら、どうなると思いますか？
+   A. api がエラー（500）を返す　B. api は `saved` を返すが、worker のログにエラーが出る
+2. **実行**: 1行消して保存し、worker を作り直して、送ります（ログは流したままにしておきます）。
+
+   ```bash
+   docker compose up -d worker
+   curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+   ```
+
+3. **見る**: `curl` の答えは、いつもどおりです。
+
+   ```text
+   {"status": "saved"}
+   ```
+
+   worker のログには、次が出ます。
+
+   ```text
+   [2026-11-18 06:58:54,645: INFO/MainProcess] Task catalog.tasks.make_thumbnail[610b0002-...] received
+   [2026-11-18 06:58:54,669: ERROR/ForkPoolWorker-7] Task catalog.tasks.make_thumbnail[610b0002-...] raised unexpected: FileNotFoundError(2, 'No such file or directory')
+   Traceback (most recent call last):
+     ...
+     File "/app/src/catalog/tasks.py", line 11, in make_thumbnail
+       img = Image.open(product.image)
+     ...
+   FileNotFoundError: [Errno 2] No such file or directory: '/app/media/products/s_bs27Agn.jpg'
+   ```
+
+   ✅ 検証済み: 2026-11-18（`line 11` の数字とファイル名は、あなたの書き方と送ったファイルで変わる）
+
+   部品に分けて読みます。
+
+   | 部品 | 意味 |
+   | --- | --- |
+   | `ERROR/ForkPoolWorker-7` | worker の作業係が、仕事に**失敗した** |
+   | `raised unexpected: FileNotFoundError` | 「ファイルが見つからない」というエラーで止まった |
+   | `tasks.py", line 11` / `Image.open(product.image)` | チャンク1 の `Image.open` の行で止まった |
+   | `'/app/media/products/s_bs27Agn.jpg'` | db には場所が書いてある（api が書いた）。でも worker の `/app/media` は、倉庫ではなく**ただの空のフォルダ**なので、ファイルが無い |
+
+   答えは **B** です。api は**メモを入れたらすぐ返事をする**ので（P4-6e）、worker が失敗したことを**知りません**。仕事を任せる形にすると、失敗は **worker のログにしか出ない**のです。
+
+   > ⚠️ このとき db の `thumbnail` 列は、**前のサムネイルのまま**です（🔎 の `SELECT` で見られる）。画像は新しいのに、サムネイルは古い。画面だけ見ていると気づけません。
+
+4. **元に戻す**: `- media:/app/media` の行を戻して保存し、`docker compose up -d worker` で作り直します。もう一度送って、worker のログに `succeeded ... (200, 133)` が出ることを確かめます。
+
+### 🐳 Docker の中の図（後）
+
+動く図のページ（`docs/visual/docker-inside.html`）の **「6f」** のボタンを押し、**worker の箱**をクリックしてみてください。右の説明に、今日 worker がするようになったこと（db を読む・倉庫に書く）が出ます。次に **倉庫 media** をクリックして、`thumbs/` が増えたことを確かめます。
+
+> 🗺️ 全体の地図（`docs/02-system-map.md`）の「1枚の地図」「🔎 調べ方の地図」「つまずきメモ」にも、今日の分を書き足しました。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。各行の右に「なぜ」を一言ずつ書くのがポイントです。
+
+```text
+受付箱から「商品 1 のサムネイルを作って」のメモ
+        │
+        ▼
+worker の箱  make_thumbnail
+  ① ＿＿＿ から商品 1 を読み、倉庫 ＿＿＿＿ の元画像を開く
+       なぜ: メモには ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ しか入っていないから
+  ② db の商品の表に、＿＿＿＿＿＿＿＿＿ 列を足す（migrate は ＿＿＿ の箱から1回）
+       なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+  ③ 縦横 ＿＿＿ 以内に縮めて ＿＿＿＿＿/ に保存し、② の列に場所を書く
+       なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+        │
+        ├──▶ 倉庫 media の /app/media/thumbs/1.jpg （＿＿＿ の箱からも見える）
+        └──▶ db の thumbnail 列 = "＿＿＿＿＿＿＿＿＿＿＿"
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+受付箱から「商品 1 のサムネイルを作って」のメモ
+        │
+        ▼
+worker の箱  make_thumbnail
+  ① db から商品 1 を読み、倉庫 media の元画像を開く
+       なぜ: メモには 仕事の名前と商品の番号 しか入っていないから
+  ② db の商品の表に、thumbnail 列を足す（migrate は api の箱から1回）
+       なぜ: サムネイルの場所を、あとで db にたずねればすぐ分かるようにするため
+  ③ 縦横 200 以内に縮めて thumbs/ に保存し、② の列に場所を書く
+       なぜ: 画面に小さな画像を出せるようにするため。縮めるのは1回だけで済む
+        │
+        ├──▶ 倉庫 media の /app/media/thumbs/1.jpg （api の箱からも見える）
+        └──▶ db の thumbnail 列 = "thumbs/1.jpg"
+```
+
+「なぜ」は、言い方がちがっても、意味が合っていれば正解です。埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。最後に、動く図のページの「6f」と見比べます。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「worker が失敗したら api もエラーになると思っていたけど、実は api は何も知らずに saved を返していた」
+
+### ✅ できるようになったこと
+
+- [ ] worker が db と倉庫 `media` の両方を使えるのはなぜかを、道と倉庫の言葉で説明できる
+- [ ] `models.py` を変えたのに `migrate` していないと何が起きるかを、打つ前に予想できる
+- [ ] worker が仕事に失敗したとき、api の答えではなく worker のログで気づける
+
+**残った問い**: サムネイルは倉庫の `/app/media/thumbs/1.jpg` にできた。でも、倉庫の中のファイルは**ブラウザからは見えない**（窓口が無い）。**画面（web）にサムネイルを出すには、どうすればいいのか？**
+
+---
+▶ **次**: P4-6g 画面にサムネイルを出す（まだ作っていません。P4-6f が終わったら作ります）
 
 ---
 

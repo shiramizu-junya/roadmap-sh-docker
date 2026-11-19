@@ -22,7 +22,9 @@ DBeaver       ── :3306 Mac だけ     ──▶ db      倉庫 db-data（消
 Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作り直すと消える）
                                                 0番の部屋: カート / 1番の部屋: 受付箱
 （窓口なし）                            worker ──▶ redis の 1番を見張り、メモが来たら仕事をする
+                                        worker ──▶ db（商品を読む・サムネイルの場所を書く。P4-6f で追加）
                                         api・worker ──▶ 倉庫 media（画像。消えない。P4-6d で追加）
+                                                        products/ = 元の画像（api が書く）、thumbs/ = サムネイル（worker が書く。P4-6f）
 ```
 
 **読み方**: 左が Mac の道具、まん中が窓口（④）、右が Docker の中の箱（①）。Mac からは窓口を通って箱に入る。箱どうしは、同じ道（②）にいる相手とだけ話せる。api と worker のコードは、Mac の `apps/api/src` を写して使っている（③ bind mount）。
@@ -54,7 +56,7 @@ Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作�
 | --- | --- | --- | --- |
 | Mac のフォルダを写す | bind mount | api・worker の `src` | Mac にあるので残る |
 | 名前付きの倉庫 | named volume | db の `db-data` | 残る |
-| 名前付きの倉庫 | named volume | api・worker の `media`（`/app/media`。2つの箱で分け合う。P4-6d で追加） | 残る |
+| 名前付きの倉庫 | named volume | api・worker の `media`（`/app/media`。2つの箱で分け合う。P4-6d で追加。`products/` に元の画像、`thumbs/` にサムネイル） | 残る |
 | なし | — | redis | **消える**（2026-11-15 に `cart:test` で確かめた） |
 
 ### ④ 窓口（ポート）
@@ -88,6 +90,10 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | worker が知っている仕事（task）の一覧 | `docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered`（起動ログの `[tasks]` の下でも分かる） |
 | worker にメモが届いて、仕事が終わったか | `docker compose logs -f --since 1m worker` の `received`（受け取った）と `succeeded`（終わった） |
 | 受付箱にたまっているメモの枚数 | `docker compose exec redis redis-cli -n 1 LLEN celery`（worker が動いていると、すぐ 0 に戻る） |
+| worker から db に届くか | `docker compose exec worker .venv/bin/python src/manage.py shell -c "..."`（worker の中で Django の1行を試す） |
+| db の商品の行に何が書かれたか | `docker compose exec db mysql -uec -pec-pass ec -e "SELECT id, image, thumbnail FROM catalog_product"` |
+| 設計図（マイグレーション）が db に当たったか | `docker compose exec api .venv/bin/python src/manage.py showmigrations catalog`（`[X]` なら当たっている） |
+| 箱の中のファイルを Mac で見る | `docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg` → `open /tmp/thumb.jpg` |
 
 ## つまずきメモ
 
@@ -95,4 +101,6 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | --- | --- | --- |
 | `.env` に書いたのに `KeyError` | `env_file:` は**箱を作るときに一度だけ**渡る。古い箱を使い回していた | `docker compose up -d <サービス名>` で作り直す |
 | `compose.yaml` が `mapping values are not allowed` | 字下げのずれ（全角スペース・保存時の自動整形） | `.zed/settings.json` で YAML の自動整形を止めた。`watch:` は1行の書き方にした |
+| `Unknown column 'catalog_product.thumbnail'` で 500 | `models.py` に列を足して保存した（api は読み直した）が、`migrate` していない。db にはまだ列が無い | `makemigrations` → `migrate` を api から打つ（worker の分も1回で済む） |
+| api は `saved` なのに、サムネイルができない | worker が仕事に失敗している。api はメモを入れたらすぐ返事をするので、失敗を知らない | `docker compose logs worker` の `ERROR` と `Traceback` を見る（例: worker に倉庫 `media` が無いと `FileNotFoundError`） |
 | `.py` を変えたのに worker が古いまま／`Received unregistered task` | worker（Celery）は、`runserver` と違ってコードを自分で読み直さない。名簿に無い仕事のメモは捨てる | `docker compose restart worker`。`config/celery.py` に `app.autodiscover_tasks()` があるかも見る |
