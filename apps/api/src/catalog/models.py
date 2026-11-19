@@ -6,6 +6,7 @@ class Product(models.Model):
     price = models.PositiveIntegerField()
     description = models.TextField(blank=True)
     image = models.ImageField(upload_to="products/", blank=True)
+    thumbnail = models.ImageField(upload_to="thumbs/", blank=True)
 
     def __str__(self):
         return self.name
