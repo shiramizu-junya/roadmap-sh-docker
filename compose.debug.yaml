@@ -1,0 +1,10 @@
+# worker をデバッガ（Zed）で止めたいときだけ重ねて使う設定
+#   docker compose -f compose.yaml -f compose.debug.yaml up -d worker
+# ふだんの起動（docker compose up）では読まれない
+services:
+    worker:
+        # debugpy の上で celery を起動し、5679 番で Zed からの接続を待つ
+        # --pool solo: 仕事を子プロセスに分けず、この1つのプロセスで実行する（分けるとブレークポイントで止まらない）
+        command: [".venv/bin/python", "-m", "debugpy", "--listen", "0.0.0.0:5679", "-m", "celery", "--workdir", "src", "-A", "config", "worker", "--pool", "solo", "--loglevel", "info"]
+        ports:
+            - "127.0.0.1:5679:5679"   # 自分の Mac からだけ繋がる
