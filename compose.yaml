@@ -56,6 +56,7 @@ services:
             - media:/app/media
         networks:
             - back
+        stop_grace_period: 30s
         command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
 
     redis:
