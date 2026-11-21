@@ -12,7 +12,8 @@ Mac の道具       窓口（④）              Docker の中
 
                                         【道 front】 web・api
 ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
-curl          ── :8000 どこからでも ──▶ api
+                                        web ──▶ api の /media（画像も中継する。P4-6g で追加）
+curl          ── :8000 どこからでも ──▶ api（/media/... で倉庫の画像も返す。P4-6g で追加）
 Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
 
                                         【道 back】 api・worker・db・redis
@@ -35,7 +36,7 @@ Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作�
 
 | 箱 | 係 |
 | --- | --- |
-| web | 画面（ブラウザに見せる） |
+| web | 画面（ブラウザに見せる）。`/api` と `/media` を api へ中継する（Vite の proxy） |
 | api | 窓口。アプリのコードがある |
 | worker | 受付箱から仕事のメモを取り出して、サムネイルを作る（裏方） |
 | db | 消えたら困るデータを、ディスクにずっと取っておく（商品）。正式名称: RDBMS |
@@ -93,6 +94,9 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | worker から db に届くか | `docker compose exec worker .venv/bin/python src/manage.py shell -c "..."`（worker の中で Django の1行を試す） |
 | db の商品の行に何が書かれたか | `docker compose exec db mysql -uec -pec-pass ec -e "SELECT id, image, thumbnail FROM catalog_product"` |
 | 設計図（マイグレーション）が db に当たったか | `docker compose exec api .venv/bin/python src/manage.py showmigrations catalog`（`[X]` なら当たっている） |
+| ブラウザが画像を取りに行く先で、画像が返るか | `curl -s -I localhost:5173/media/thumbs/1.jpg`（`Content-Type: image/jpeg` なら OK。`text/html` なら web が中継していない） |
+| api の箱が画像を返せるか | `curl -s -I localhost:8000/media/thumbs/1.jpg`（`404` なら `urls.py` の `static()` か `DEBUG` を見る） |
+| Django がその URL をどう扱ったか | `docker compose logs --since 1m api \| grep media`（行の最後の数字 `200` / `404`） |
 | 箱の中のファイルを Mac で見る | `docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg` → `open /tmp/thumb.jpg` |
 
 ## つまずきメモ
@@ -104,3 +108,6 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | `Unknown column 'catalog_product.thumbnail'` で 500 | `models.py` に列を足して保存した（api は読み直した）が、`migrate` していない。db にはまだ列が無い | `makemigrations` → `migrate` を api から打つ（worker の分も1回で済む） |
 | api は `saved` なのに、サムネイルができない | worker が仕事に失敗している。api はメモを入れたらすぐ返事をするので、失敗を知らない | `docker compose logs worker` の `ERROR` と `Traceback` を見る（例: worker に倉庫 `media` が無いと `FileNotFoundError`） |
 | `.py` を変えたのに worker が古いまま／`Received unregistered task` | worker（Celery）は、`runserver` と違ってコードを自分で読み直さない。名簿に無い仕事のメモは捨てる | `docker compose restart worker`。`config/celery.py` に `app.autodiscover_tasks()` があるかも見る |
+| 画像の `<img>` が出ない。`localhost:5173/media/...` が `200` なのに `text/html` | web の箱の Vite が `/media` を中継していない。自分の画面の HTML を返している | `vite.config.js` の `proxy` に `"/media": "http://api:8000"` を足し、`docker compose up -d --build web` |
+| `vite.config.js` を変えたのに効かない（restart してもだめ） | `vite.config.js` はイメージを作るときに `COPY` で写し取ったもの。`watch` も `src/` しか同期しない | `docker compose up -d --build web` でイメージから作り直す |
+| `<img src="http://api:8000/...">` の画像が出ない | React はブラウザ（Mac）で動く。Mac は Docker の道にいないので `api` を知らない（`Could not resolve host: api`） | 住所は `/media/...` にして、web に中継させる |

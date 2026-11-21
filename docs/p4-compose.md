@@ -4804,7 +4804,610 @@ worker の箱  make_thumbnail
 **残った問い**: サムネイルは倉庫の `/app/media/thumbs/1.jpg` にできた。でも、倉庫の中のファイルは**ブラウザからは見えない**（窓口が無い）。**画面（web）にサムネイルを出すには、どうすればいいのか？**
 
 ---
-▶ **次**: P4-6g 画面にサムネイルを出す（まだ作っていません。P4-6f が終わったら作ります）
+▶ **次**: P4-6g 画面にサムネイルを出す
+
+---
+
+## P4-6g: 画面にサムネイルを出す
+
+**❓ この回の問い**: 前回（P4-6f）で、サムネイルは倉庫の `/app/media/thumbs/1.jpg` にできた。でも倉庫の中のファイルには、ブラウザからたどり着く道が無い。
+→ **ブラウザ（Mac）は、どの道を通って、倉庫の中のサムネイルを取りに行けばいいのか？**
+
+**作ること / 確かめること**: Django に `/media/...` の画像を配らせる。商品一覧 API に、サムネイルの住所（URL）を足す。web の箱（Vite）に、`/media` も api へ中継させる。http://localhost:5173 の商品一覧にサムネイルが出ることを確かめる
+**重要度**: 🔴 毎日使う — 「ブラウザで動くコード」と「箱の中で動くコード」で、使える住所が違う。これを取り違えると、画像も API もつながらないから
+**前ステップとの接続**: P4-6f で作ったサムネイルを、画面まで届ける。`compose.yaml` は変えない。変えるのは `config/settings.py`・`config/urls.py`・`config/api.py`・`apps/web/vite.config.js`
+
+**P4-6 ぜんたいの地図での位置**: ⑤（画面にサムネイルを出す）
+
+### 🔁 前回の思い出し
+
+**問い**: P4-6f の 🧪 で、worker が失敗したのに、api は `{"status": "saved"}` と返しました。なぜでしたか？ 一言で。
+
+<details><summary>答え</summary>
+
+api は、受付箱に**メモを入れただけ**で、worker の仕事の結果を待っていないからです（非同期 / asynchronous）。失敗は **worker のログにしか出ません**。今日は、そうやって worker が作ったサムネイルを、画面に出します。
+
+</details>
+
+### 🛠️ 先に自分で決める
+
+教材が答えを出す前に、**あなたが画像の住所を決めます。** このあとのチャンクは、あなたの選んだ方針の答え合わせとして進みます。
+
+**困りごと**（P4-6f の残った問い）
+
+- サムネイルは倉庫 `media` の `thumbs/1.jpg` にある。api と worker の箱からは見える
+- でも、商品一覧の画面を描いている **React のコードは、Mac のブラウザの中で動いています**（web の箱が配った JavaScript を、ブラウザが受け取って動かす）
+- `App.jsx` には、P4-5 のときから `<img src={p.thumbnail_url} />` の行が用意されている。この `src` に、どんな住所を入れればいいか
+
+**🤔 どの住所を選びますか？** 1つ選んで、理由を一言で書いてください（「分からない」でも大丈夫です）。
+
+| 案 | `<img src=...>` に入れる住所 | ブラウザが取りに行く先 |
+| --- | --- | --- |
+| A | `http://api:8000/media/thumbs/1.jpg` | サービス名 `api` の箱 |
+| B | `http://localhost:8000/media/thumbs/1.jpg` | Mac の窓口 8000 番 → api の箱 |
+| C | `/media/thumbs/1.jpg`（頭に何も付けない） | いま開いているページと同じ所（localhost:5173 → web の箱）→ web が api へ中継 |
+
+<details><summary>ヒント</summary>
+
+1. サービス名（`api`、`db` など）で呼び合えるのは、**どこにいるもの**どうしでしたか？（P4-6b の 🧪、`docs/02-system-map.md` の「② 道（ネットワーク）」）
+2. いまの画面は、商品一覧を `fetch("/api/products")` で取りに行っています。この `/api/...` は、誰がどこへ中継していましたか？（P4-4、`vite.config.js` の `proxy`）
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+この教材は **C** で進めます。
+
+| 案 | 判定 | 理由 |
+| --- | --- | --- |
+| A | ✗ | ブラウザは **Mac の上**で動いています。Mac は Docker の道（front / back）にいないので、`api` という名前を知りません。画像は壊れて表示されます |
+| B | △ 動く | この Mac では動きます（8000 番は公開されている）。でも、住所に「`localhost:8000`」と**場所を書き込んで**しまうので、別のパソコンや本番では使えません。画面と API で窓口も2つに分かれます |
+| C | ◎ | いまの `/api` と同じ道です。ブラウザは「いま開いているページ（localhost:5173）」に頼むだけ。中継は、**Docker の道（front）の中にいる web の箱**がするので、`api` という名前が使えます。本番で入口を1つにまとめるとき（P6-1 の Nginx）も、この形のまま使えます |
+
+A がだめなことは、Mac から実際に確かめられます。
+
+```bash
+curl -sS -I http://api:8000/media/thumbs/1.jpg
+```
+
+```text
+curl: (6) Could not resolve host: api
+```
+
+✅ 検証済み: macOS / Docker Compose v5.5.1（2026-11-19）
+
+`Could not resolve host` = 「`api` という名前の住所が分からない」。Mac のブラウザも同じです。
+
+</details>
+
+### 🐳 Docker の中の図
+
+動く図のページ（`docs/visual/docker-inside.html`。ブラウザで `open docs/visual/docker-inside.html`）で、**「6f」と「6g」のボタンを交互に押して**比べてください。赤く光るのが今日変わる所です。ブラウザ → 窓口 5173 → web → api → 倉庫 media という、**画像が届くまでの線**が増えます。
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の「1枚の地図」に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+                                        web ──▶ api の /media（画像も中継する）  ★ 今日
+curl          ── :8000 どこからでも ──▶ api
+                                        api が /media/... で倉庫の画像を返す    ★ 今日
+Zed           ── :5678 Mac だけ     ──▶ api（デバッガ）
+
+                                        【道 back】 api・worker・db・redis
+                                        （今日は変わらない）
+                                        api・worker ──▶ 倉庫 media（画像。消えない）
+```
+
+**見てほしいところ**: 今日も**新しい箱・道・倉庫・窓口は増えません。** P4-4 で作った「web が `/api` を api へ中継する」道に、**`/media` も乗せる**だけです。
+
+### 🗺️ 今日の地図
+
+```text
+Mac のブラウザ（React の <img src="/media/thumbs/1.jpg">）
+        │  localhost:5173（窓口）
+        ▼
+web の箱（Vite）  vite.config.js の proxy
+  ③ /media で始まる頼みを、api:8000 へ中継する          … チャンク3（vite.config.js）
+        │  道 front
+        ▼
+api の箱（Django）
+  ① /media/... の頼みに、倉庫 media のファイルを返す    … チャンク1（settings.py と urls.py）
+  ② 商品一覧に thumbnail_url（画像の住所）を入れる      … チャンク2（api.py）
+        │
+        ▼
+倉庫 media の /app/media/thumbs/1.jpg（P4-6f で worker が作った）
+```
+
+**見てほしいところ**: 番号は**作る順**です（奥の api から作り、最後に入口の web をつなぐ）。画像が通る順は、**上から下**です。
+
+### 6g-0. このステップの初出
+
+**Django**: `MEDIA_URL`、`django.conf.urls.static.static()`、`ninja.Field(alias=...)`
+**Docker**: なし（P4-4 の `proxy` と `up -d --build` を、もう一度使う）
+
+---
+
+### チャンク1: Django に画像を配らせる（`apps/api/src/config/settings.py` と `config/urls.py`）— 地図の①
+
+**このチャンクの目的**: 倉庫の中のファイルを、**URL で取りに来られる**ようにする。まずは Mac の窓口 8000 番から、api に直接たずねて確かめる。
+
+> 💡 このチャンクだけ、ファイルを**2つ**さわります。2つで1つの仕事（「`/media/` という住所」と「その住所への道」）なので、分けると片方だけでは何も確かめられないためです。書くのは合わせて4行です。
+
+**🤔 先に考える**: いま（何も書く前に）、Mac で次を打つとどうなると思いますか？
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' localhost:8000/media/thumbs/1.jpg
+```
+
+A. `200`（画像が返る）　B. `404`（見つからない）
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: ファイルは倉庫にあります（P4-6f で `ls` で見た）。では、Django は `/media/...` という URL を知っているでしょうか？ `config/urls.py` には、何の道が書いてありましたか？
+
+<details><summary>答え</summary>
+
+**B（`404`）** です。
+
+```text
+404
+```
+
+✅ 検証済み: Django 5.2.18（2026-11-19）
+
+ファイルは倉庫にあっても、Django の **URL の一覧**（`config/urls.py`）には `api/` の道しかありません。知らない URL には「見つからない」と返します。api のログにも出ます。
+
+```text
+Not Found: /media/thumbs/1.jpg
+"GET /media/thumbs/1.jpg HTTP/1.1" 404 2228
+```
+
+</details>
+
+**🎯 書くもの**:
+
+1. `settings.py` の `MEDIA_ROOT` のすぐ下に、「画像の住所は `/media/` で始める」という1行を足す
+2. `urls.py` で、`settings` と `static` を読み込む2行を足し、`urlpatterns` の**あと**に「`MEDIA_URL` の住所に来たら `MEDIA_ROOT` のファイルを返す」道を1行足す
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `MEDIA_URL = "/media/"` | メディア ユーアールエル（**MEDIA_URL** 設定） | 倉庫の画像を、ブラウザから見るときの**住所の頭**。P4-6c で決めた `MEDIA_ROOT`（**置き場**）と対になる | 無いと、画像の住所が `/thumbs/1.jpg` のように頭なしになる。`static()` は空の頭を受け付けず `ImproperlyConfigured: Empty static prefix not permitted` |
+| `from django.conf import settings` | — | `settings.py` の値を読む入口 | 無いと `NameError` |
+| `from django.conf.urls.static import static` | スタティック（**`static()`** 関数） | 「ある住所の頭 → あるフォルダのファイル」という道を作る道具 | 無いと `NameError` |
+| `urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)` | プラス イコール | `/media/` で始まる URL が来たら、`/app/media`（倉庫）の下から同じ名前のファイルを探して返す道を、一覧の**最後に足す** | 無いと 🤔 のとおり `404` |
+
+**✍️ 自分で書く**（はじめての形なので、下を見ながら**手で打ちます**。コピペはしません）
+
+`apps/api/src/config/settings.py`（`MEDIA_ROOT` の行の下に1行）:
+
+```python
+MEDIA_ROOT = "/app/media"
+MEDIA_URL = "/media/"
+```
+
+`apps/api/src/config/urls.py`（全体。打つのは上の2行と、いちばん下の1行）:
+
+```python
+from django.conf import settings
+from django.conf.urls.static import static
+from django.urls import path
+
+from config.api import api
+
+urlpatterns = [
+    path("api/", api.urls),
+]
+urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ MEDIA_ROOT = "/app/media"
++MEDIA_URL = "/media/"
+```
+
+```diff
++from django.conf import settings
++from django.conf.urls.static import static
+ from django.urls import path
+ 
+```
+
+```diff
+     path("api/", api.urls),
+ ]
++urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+```
+
+</details>
+
+**▶️ 確かめる**: 保存したら、🤔 と同じコマンドを打ちます。api（runserver）は**保存すると自分で読み直す**ので、起動し直しは要りません（worker とのちがい。P4-6e チャンク2 の ⚠️）。今度は `-I`（中身ではなく**見出し**だけ見る）を付けます。
+
+```bash
+curl -s -I localhost:8000/media/thumbs/1.jpg
+```
+
+```text
+HTTP/1.1 200 OK
+Server: WSGIServer/0.2 CPython/3.13.18
+Content-Type: image/jpeg
+Content-Length: 1096
+```
+
+✅ 検証済み: Django 5.2.18（2026-11-19。手元と同じファイルを別の場所に写し、プロジェクト名 `p46g-verify` で確認した）
+
+`200` と `image/jpeg`（JPEG の画像）が返りました。`1096` は、P4-6f の `ls -l` で見たサムネイルの大きさ（バイト）と同じです。ブラウザで http://localhost:8000/media/thumbs/1.jpg を開くと、小さな薄茶色の四角が見えます。
+
+> ⚠️ `thumbs/1.jpg` が無いときは、`docker compose exec api ls /app/media/thumbs/` で見えた名前に置きかえてください。
+
+**🔎 答えの見つけ方**: 「Django がその URL をどう扱ったか」は、**api のログの最後の数字**を見る。
+
+```bash
+docker compose logs --since 1m api | grep media
+```
+
+```text
+"GET /media/thumbs/1.jpg HTTP/1.1" 404 2228   ← 書く前（道が無い）
+"HEAD /media/thumbs/1.jpg HTTP/1.1" 200 0     ← 書いた後（-I は HEAD という聞き方）
+```
+
+✅ 検証済み: 2026-11-19
+
+`404` なら「その住所への道が無い」、`200` なら「返せた」。ファイルがあるのに `404` のときは、`urls.py` を疑います。
+
+**📖 しくみ**
+
+- **何をしているか**: `/media/` で始まる URL と、倉庫 `media` のフォルダを、1対1で結びました。
+- **なぜ必要か**: 倉庫の中のファイルは、**箱の中のフォルダ**です。ブラウザが取りに来られるのは **URL** だけです。だから「この URL ならこのファイル」という対応表が要ります。
+- **どういう原理で動くか**:
+  1. **runserver** が `GET /media/thumbs/1.jpg` を受け取る
+  2. **Django** が `urls.py` の一覧を上から見る。`api/` には合わない。最後の `static()` の道（`/media/` で始まる）に合う
+  3. `/media/` を取り除いた残り `thumbs/1.jpg` を、`document_root`（`/app/media`）の下で探す
+  4. `/app/media` は倉庫 `media` なので、worker が書いたファイルが見える（P4-6d）。見つかったら中身を返す
+
+> 🔓 **教材用の簡略化**: `static()` の道は、**`DEBUG = True` のときだけ**作られます（Django のコードに `if not settings.DEBUG ... return []` と書いてある）。Django 自身が画像を配るのは開発中だけで、本番では入口の **Nginx** が倉庫から直接配ります（P6-1）。🧪 で確かめます。
+
+> 📇 **MEDIA_URL** — 正式名称: Django の設定 **`MEDIA_URL`**
+> かみくだくと: アップロードされたファイルを、**ブラウザから見るときの住所の頭**。
+> 似た言葉との違い: `MEDIA_ROOT` = 箱の中の**置き場**（`/app/media`）。`MEDIA_URL` = 外から見たときの**住所**（`/media/`）。同じファイルを、2つの言葉で指している。
+> この教材では: `/media/` に決め、`static()` と次のチャンクの `thumbnail_url` で使う。
+
+---
+
+### チャンク2: 商品一覧に画像の住所を入れる（`apps/api/src/config/api.py`）— 地図の②
+
+**このチャンクの目的**: 画面（React）が「どの画像を出せばいいか」を知れるように、商品一覧の答えにサムネイルの住所を入れる。
+
+**🤔 先に考える**: `apps/web/src/App.jsx` を開いて、`<img` の行を探してください。React は、商品のどの名前の値を、画像の住所として待っていますか？ 一言で。
+
+<details><summary>答え</summary>
+
+**`thumbnail_url`** です（`{p.thumbnail_url && (<img src={p.thumbnail_url} alt="" />)}`）。P4-5 のときから用意してあり、値が無いので何も出ていませんでした。いまの商品一覧の答えには、`id`・`name`・`price`・`description` しか入っていません。
+
+```bash
+curl -s localhost:8000/api/products
+```
+
+</details>
+
+**🎯 書くもの**: `api.py` の `ProductOut` に、「`thumbnail_url` という名前で、商品の `thumbnail` 列の住所を出す」1行を足す。そのために `ninja` から `Field` も読み込む。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `Field`（import に足す） | フィールド（Django Ninja の **`Field`**。中身は Pydantic の Field） | 答えの1項目に、細かい指定（初期値・別名）を付ける道具 | 無いと `NameError` |
+| `thumbnail_url: str \| None` | 型の注釈 | 答えに `thumbnail_url` という項目を出す。中身は文字か、無いとき `null` | — |
+| `= Field(None, alias="thumbnail")` | エイリアス（**alias**、別名） | 値は、商品の **`thumbnail` 列から取ってくる**。`None` は「無いときは null」 | `alias` が無いと、`thumbnail_url` という列を探して見つからず、いつも `null` |
+
+`alias` は P4-5 の `Header(alias="X-Cart-Id")` でも使いました。あちらは「`X-Cart-Id` という見出しから取る」、こちらは「`thumbnail` という列から取る」です。
+
+**✍️ 自分で書く**（下を見ながら**手で打ちます**）
+
+```python
+from ninja import Field, File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
+```
+
+```python
+class ProductOut(ModelSchema):
+    thumbnail_url: str | None = Field(None, alias="thumbnail")
+
+    class Meta:
+        model = Product
+        fields = ["id", "name", "price", "description"]
+```
+
+（`import` の行は `Field, ` を足すだけ。`ProductOut` は、`class Meta:` の上に1行と空行を足すだけです）
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+ from django.shortcuts import get_object_or_404
+-from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
++from ninja import Field, File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
+ 
+ from catalog.models import Product
+```
+
+```diff
+ class ProductOut(ModelSchema):
++    thumbnail_url: str | None = Field(None, alias="thumbnail")
++
+     class Meta:
+         model = Product
+```
+
+</details>
+
+**▶️ 確かめる**: 商品一覧を、api に直接たずねます（読みやすく並べるため、`python3 -m json.tool` に通します）。
+
+```bash
+curl -s localhost:8000/api/products | python3 -m json.tool --no-ensure-ascii
+```
+
+```text
+[
+    {
+        "thumbnail_url": "/media/thumbs/1.jpg",
+        "id": 1,
+        "name": "木のマグカップ",
+        ...
+    },
+    {
+        "thumbnail_url": null,
+        "id": 2,
+        ...
+```
+
+✅ 検証済み: django-ninja 1.7.3（2026-11-19。あなたの手元では、P4-6f で何度も送っていれば `/media/thumbs/1_xxxxxxx.jpg` のような名前になる）
+
+商品 1 には住所、サムネイルの無い商品 2 には `null` が入りました。
+
+では、画面を開いてみます。http://localhost:5173 を開いてください。
+
+**画像は出ません。** 住所は届いているのに、なぜでしょう。ブラウザが実際に取りに行った先を、Mac からたずねます。
+
+```bash
+curl -s -I localhost:5173/media/thumbs/1.jpg
+```
+
+```text
+HTTP/1.1 200 OK
+Content-Type: text/html
+```
+
+✅ 検証済み: Vite 8.3.6（2026-11-19）
+
+`200` なのに、中身は `text/html`（**画像ではなく、ページの HTML**）です。`/media/thumbs/1.jpg` は「いま開いているページと同じ所」＝ **localhost:5173 の web の箱**に届きます。web の箱の Vite は、`/media` を**中継するように言われていない**ので、自分の画面の HTML を返してしまいました。ブラウザは HTML を画像として読めないので、何も出ません。これをチャンク3で直します。
+
+**🔎 答えの見つけ方**: 画面に出ないときは、**住所を1つずつ直接たずねる**。
+
+| たずねる先 | 何が分かるか |
+| --- | --- |
+| `curl -s localhost:8000/api/products` | API が住所を返しているか |
+| `curl -s -I localhost:8000/media/...` | api の箱が画像を返せるか（チャンク1） |
+| `curl -s -I localhost:5173/media/...` | ブラウザが**実際に**行く先で、画像が返るか（`Content-Type` を見る） |
+
+ブラウザでは、開発者ツール（`Cmd + Option + I`）の **Network** タブで、`1.jpg` の行の Type や Status を見ても分かります。
+
+**📖 しくみ**
+
+- **何をしているか**: 商品一覧の答えに、`thumbnail` 列の住所を `thumbnail_url` という名前で入れました。
+- **なぜ必要か**: db の `thumbnail` 列には `thumbs/1.jpg` という**置き場の中の名前**しか入っていません（P4-6f）。ブラウザに必要なのは、`MEDIA_URL` を頭に付けた**住所** `/media/thumbs/1.jpg` です。
+- **どういう原理で動くか**:
+  1. **Django Ninja** が、商品を1つずつ `ProductOut` の形に詰める
+  2. `thumbnail_url` は `alias="thumbnail"` なので、商品の `thumbnail` を取りに行く。中身は Django の **FieldFile**（ファイルを指す値）
+  3. Ninja は FieldFile を見つけると、**`.url`**（＝ `MEDIA_URL` ＋ 名前）に変えて答えに入れる。空なら `null`（Ninja のコード `ninja/schema.py` に `if isinstance(result, FieldFile): ... return result.url` と書いてある）
+
+> 📇 **alias** — 正式名称: Pydantic / Django Ninja の **`Field(alias=...)`**
+> かみくだくと: 答えの項目名と、**値を取ってくる元の名前**を別にする指定。
+> 似た言葉との違い: `fields = [...]`（Meta）= 列の名前を**そのまま**出す。`alias` = **別の名前**で出す。
+> この教材では: 列は `thumbnail`、React が待つ名前は `thumbnail_url`。そのずれを `alias` でつなぐ。
+
+---
+
+### チャンク3: web の箱に `/media` も中継させる（`apps/web/vite.config.js`）— 地図の③
+
+**このチャンクの目的**: ブラウザ → web の箱 → api の箱、という `/api` と同じ道に、`/media` も乗せる（🛠️ の C）。
+
+**🤔 先に考える**: `vite.config.js` を書き換えて**保存しただけ**で、web の箱の Vite に効くと思いますか？
+A. 効く（api の runserver のように読み直す）　B. 効かない
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: `compose.yaml` の web には、`volumes:`（Mac のフォルダを写す）がありますか？ `develop: watch:` で写しているのは、どのフォルダでしたか？ `apps/web/Dockerfile` の `COPY . .` は、いつ動きますか？
+
+<details><summary>答え</summary>
+
+**B（効かない）** です。
+
+- web の箱には、Mac のフォルダを写す `volumes:` がありません。`vite.config.js` は、**イメージを作るとき**に `COPY . .` で箱の中へ**写し取られた**ものです（P4-4）
+- `develop: watch:` で同期しているのは `./apps/web/src` だけです。`vite.config.js` は `src` の外にあります
+- だから、Mac で保存しても、箱の中の `vite.config.js` は古いまま。**イメージを作り直す**必要があります
+
+`docker compose restart web` でもだめです。restart は**同じイメージの同じ箱**を起動し直すだけで、イメージは作り直しません（✅ 検証済み: restart のあとも `502`／`text/html` のままだった。2026-11-19）。
+
+</details>
+
+**✍️ 自分で書く**（`proxy` は P4-4 に続いて2回目なので、**穴埋め**です）
+
+`apps/web/vite.config.js` の `proxy` の中、`"/api"` の行の下に1行足します。`___` を埋めてください。
+
+```js
+        proxy: {
+            // /api で始まるリクエストを、api サービスへ中継する
+            "/api": "http://api:8000",
+            "/media": "___",
+        },
+```
+
+<details><summary>ヒント</summary>
+
+1つ上の行と同じ相手です。中継するのは **web の箱の中の Vite** なので、Docker の道の中の名前が使えます。
+
+</details>
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+             // /api で始まるリクエストを、api サービスへ中継する
+             "/api": "http://api:8000",
++            "/media": "http://api:8000",
+         },
+     },
+```
+
+</details>
+
+**▶️ 確かめる**: 保存したら、web のイメージを作り直して、箱を作り直します。コマンドは自分で思い出して打ちます（P4-4 で何度も使いました）。
+
+<details><summary>ヒント: 作り直すコマンド</summary>
+
+```bash
+docker compose up -d --build web
+```
+
+</details>
+
+そのあと、チャンク2 で `text/html` だったものを、もう一度たずねます。
+
+```bash
+curl -s -I localhost:5173/media/thumbs/1.jpg
+```
+
+```text
+HTTP/1.1 200 OK
+Vary: Origin
+date: Thu, 19 Nov 2026 11:54:46 GMT
+server: WSGIServer/0.2 CPython/3.13.18
+```
+
+✅ 検証済み: Vite 8.3.6 / Django 5.2.18（2026-11-19）
+
+`server: WSGIServer`（Django の runserver）が返事をしています。**localhost:5173 にたずねたのに、答えたのは api** です。web の箱が中継した証拠です。api のログにも `"HEAD /media/thumbs/1.jpg HTTP/1.1" 200` が出ます。
+
+最後に、http://localhost:5173 を開き直してください（`Cmd + Shift + R` で強めに読み直す）。**商品 1「木のマグカップ」の左に、サムネイルが出ます。** サムネイルの無い商品には、何も出ません。
+
+✅ 検証済み: ブラウザ（Chromium）で開き、`<img>` の画像が `200 × 133` で読み込まれていることを確かめた（2026-11-19）
+
+**📖 しくみ**
+
+- **何をしているか**: web の箱の Vite に、「`/media` で始まる頼みも、`api:8000` へ送り直す」と教えました。
+- **なぜ必要か**: ブラウザは Mac にいるので、Docker の道の中の `api` を知りません（🛠️ の A）。でも web の箱は **front の道**にいるので、`api` という名前で呼べます。だから、ブラウザが頼めるところ（窓口 5173）にいる web に、**中継役**をしてもらいます。
+- **どういう原理で動くか**:
+  1. **ブラウザ**が、`<img src="/media/thumbs/1.jpg">` を見て、いま開いているページと同じ `localhost:5173` に `GET /media/thumbs/1.jpg` を送る
+  2. Mac の **窓口 5173** から、**web の箱**の Vite に届く
+  3. **Vite** が `proxy` の一覧を見る。`/media` に合うので、front の道で `http://api:8000/media/thumbs/1.jpg` へ送り直す（`api` という名前は Docker が答える）
+  4. **api の箱**の Django が、チャンク1 の道で倉庫のファイルを返す。Vite はそれを、そのままブラウザに返す
+
+---
+
+### 🧪 壊してみる
+
+`DEBUG` を `False` にすると、どうなるでしょう（チャンク1 の 🔓 の答え合わせです）。
+
+1. **予想**: `apps/api/src/config/settings.py` の `DEBUG = True` を **`DEBUG = False`** に変えて保存します（api は自分で読み直します）。そのあと、次の2つはどうなると思いますか？
+   - `curl -s localhost:8000/api/products` の `thumbnail_url`
+   - `curl -s -I localhost:8000/media/thumbs/1.jpg`
+2. **実行**: 変えて保存し、2つを打ちます。
+
+   ```bash
+   curl -s localhost:8000/api/products
+   curl -s -I localhost:8000/media/thumbs/1.jpg
+   ```
+
+3. **見る**:
+
+   ```text
+   [{"thumbnail_url": "/media/thumbs/1.jpg", "id": 1, ...
+   ```
+
+   ```text
+   HTTP/1.1 404 Not Found
+   ```
+
+   ✅ 検証済み: Django 5.2.18（2026-11-19。localhost:5173 から頼んでも `404`。画面のサムネイルも消える）
+
+   | 部品 | 意味 |
+   | --- | --- |
+   | `"thumbnail_url": "/media/thumbs/1.jpg"` | API は住所を**返し続ける**（db の列も `MEDIA_URL` も変わっていない） |
+   | `404 Not Found` | でも、その住所に行くと**見つからない**。`static()` が `DEBUG = False` のとき道を作らないから（チャンク1 の 🔓） |
+   | 404 のページが短い `Not Found` だけ | `DEBUG = False` だと、Django は「道の一覧」などの詳しい説明を出さない（本番で中身を見せないため） |
+
+   ファイルは倉庫にあり、住所も正しいのに、**配る人がいない**状態です。本番（`DEBUG = False`）では、この「配る人」を Django ではなく **Nginx** にやらせます（P6-1）。
+
+4. **元に戻す**: `DEBUG = True` に戻して保存し、`curl -s -I localhost:8000/media/thumbs/1.jpg` が `200` に戻ることを確かめます。
+
+> ⚠️ `DEBUG = False` のまま放っておくと、エラーのときに詳しい説明が出なくなり、デバッグしにくくなります。必ず戻してください。
+
+### 🐳 Docker の中の図（後）
+
+動く図のページ（`docs/visual/docker-inside.html`）の **「6g」** のボタンを押し、**web の箱**をクリックしてみてください。右の説明に、今日 web がするようになったこと（`/media` も api へ中継する）が出ます。次に **ブラウザ** から倉庫までの赤い線を、指でたどってみます。
+
+> 🗺️ 全体の地図（`docs/02-system-map.md`）の「1枚の地図」「🔎 調べ方の地図」「つまずきメモ」にも、今日の分を書き足しました。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。各行の右に「なぜ」を一言ずつ書くのがポイントです。
+
+```text
+Mac の ＿＿＿＿＿（React の <img src="/media/thumbs/1.jpg">）
+        │  localhost:＿＿＿＿（窓口）
+        ▼
+＿＿＿ の箱（Vite）  vite.config.js の proxy
+  ③ /media で始まる頼みを、＿＿＿:8000 へ中継する
+       なぜ: ブラウザは ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ から
+       保存しただけで効かないのは: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿ から
+        │  道 ＿＿＿＿＿
+        ▼
+api の箱（Django）
+  ① /media/... の頼みに、倉庫 ＿＿＿＿ のファイルを返す（settings.py の ＿＿＿＿＿＿＿＿ と urls.py の static()）
+       なぜ: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+  ② 商品一覧に ＿＿＿＿＿＿＿＿＿＿＿＿ を入れる（alias で thumbnail 列から取る）
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+Mac の ブラウザ（React の <img src="/media/thumbs/1.jpg">）
+        │  localhost:5173（窓口）
+        ▼
+web の箱（Vite）  vite.config.js の proxy
+  ③ /media で始まる頼みを、api:8000 へ中継する
+       なぜ: ブラウザは Mac にいて、Docker の道の中の api という名前を知らない から
+       保存しただけで効かないのは: vite.config.js はイメージを作るときに写し取ったもので、watch も src しか同期しない から
+        │  道 front
+        ▼
+api の箱（Django）
+  ① /media/... の頼みに、倉庫 media のファイルを返す（settings.py の MEDIA_URL と urls.py の static()）
+       なぜ: 倉庫のファイルは箱の中のフォルダで、ブラウザは URL でしか取りに来られないから
+  ② 商品一覧に thumbnail_url を入れる（alias で thumbnail 列から取る）
+```
+
+「なぜ」は、言い方がちがっても、意味が合っていれば正解です。埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。最後に、動く図のページの「6g」と見比べます。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「React のコードは web の箱の中で動いていると思っていたけど、実は Mac のブラウザの中で動いていた」
+
+### ✅ できるようになったこと
+
+- [ ] React の `<img src>` に `http://api:8000/...` が使えない理由を、「ブラウザはどこで動くか」で説明できる
+- [ ] `vite.config.js` を変えたとき、保存・restart・`up -d --build` のどれが要るかを、打つ前に言える
+- [ ] 画像が出ないとき、API・api の箱・web の箱の順に `curl` でたずねて、どこで止まっているかを見つけられる
+
+**残った問い**: これで、画像を送ってから画面に出るまでが全部つながった。でも、worker がサムネイルを作っている**途中で** `docker compose stop` や作り直しをしたら、その仕事はどうなるのか？ 途中で切られたら、サムネイルは中途半端なまま残らないか？
+
+---
+▶ **次**: P4-6h worker を止めるとき、仕事が終わるまで待たせる（まだ作っていません。P4-6g が終わったら作ります）
 
 ---
 

@@ -228,16 +228,23 @@ const STEPS = [
     q: "worker は倉庫の画像をどうやって開いて、小さくして、どこに保存すればいいのか？",
     changes: ["worker が db から商品を読み、倉庫 media の元画像を Pillow で開く", "db の商品の表に thumbnail 列を足した（migrate は api から1回）", "縦横 200 以内に縮めて /app/media/thumbs/ に保存し、thumbnail 列に場所を書く（あなたが B を選んだ）", "worker が失敗しても api は saved を返す。失敗は worker のログにだけ出る"],
     hl: ["w-worker-db", "worker-thumb", "db-thumb", "media-thumbs", "w-worker-media"] },
+  { id: "p4-6g", tag: "6g", title: "画面にサムネイルを出す",
+    q: "ブラウザ（Mac）は、どの道を通って、倉庫の中のサムネイルを取りに行けばいいのか？",
+    changes: ["Django が /media/... の頼みに、倉庫 media のファイルを返す（MEDIA_URL と static()。開発中だけ）", "商品一覧の答えに thumbnail_url（画像の住所）を入れた", "web の箱の Vite が、/api に加えて /media も api:8000 へ中継する（あなたが C を選んだ）", "React はブラウザ（Mac）で動くので、http://api:8000 は使えない。vite.config.js はイメージに入っているので up -d --build web で作り直す"],
+    hl: ["browser", "w-5173", "web-proxy", "w-web-api", "api-mediaurl", "api-thumburl", "w-api-media"] },
 ];
 // 読み手が終えたステップ（成長の記録の数に使う）
-const DONE_UNTIL = "p4-6f";
+const DONE_UNTIL = "p4-6g";
 const FUTURE = [
-  { tag: "6g", title: "画面に出す" },
   { tag: "6h", title: "止めるとき待たせる" },
 ];
 
 const INFO = {
-  web: { kind: "箱（コンテナ）", name: "web", formal: "service / container", plain: "画面の係。ブラウザに React の画面を見せる。", detail: "道は front だけ。db や redis へは、必ず api を通る。", cmd: "docker compose logs web" },
+  web: { kind: "箱（コンテナ）", name: "web", formal: "service / container（Vite の開発サーバ）", plain: "画面の係。ブラウザに React の画面（JavaScript）を配る。", detail: "道は front だけ。db や redis へは、必ず api を通る。配った React のコードは、web の箱ではなくブラウザ（Mac）の中で動く。ブラウザからの /api と /media（6g から）は、Vite の proxy が api:8000 へ中継する。", cmd: "docker compose logs web" },
+  browser: { kind: "Mac の道具", name: "ブラウザ", formal: "web browser（React はここで動く）", plain: "web の箱から受け取った React のコードを、Mac の上で動かす。", detail: "Mac は Docker の道（front / back）にいないので、api という名前を知らない（curl http://api:8000/... は Could not resolve host: api）。だから画像の住所は /media/... にして、窓口 5173 の web に頼む。", cmd: "curl -s -I localhost:5173/media/thumbs/1.jpg" },
+  proxy: { kind: "web の設定", name: "vite.config.js の proxy", formal: "Vite server.proxy（リバースプロキシ）", plain: "ブラウザから来た /api と /media の頼みを、front の道で api:8000 へ送り直す中継役。", detail: "web の箱の中で動くので、サービス名 api が使える。localhost:8000 にすると、web の箱自身の 8000 番を探して 502（P4-4）。vite.config.js は COPY でイメージに入っていて、watch も src/ しか同期しないので、変えたら docker compose up -d --build web（restart では効かない）。", cmd: "docker compose up -d --build web" },
+  mediaurl: { kind: "api のコード", name: "MEDIA_URL と static()", formal: "Django の MEDIA_URL 設定と django.conf.urls.static.static()", plain: "/media/ で始まる URL が来たら、倉庫 media（MEDIA_ROOT）の同じ名前のファイルを返す道。", detail: "MEDIA_ROOT = 置き場（/app/media）、MEDIA_URL = 住所の頭（/media/）。static() は DEBUG = True のときだけ道を作る。DEBUG = False にすると、住所は返るのにファイルは 404。本番は Nginx が配る（P6-1）。", cmd: "curl -s -I localhost:8000/media/thumbs/1.jpg" },
+  thumburl: { kind: "api のコード", name: "ProductOut.thumbnail_url", formal: "Django Ninja の Field(alias=\"thumbnail\")", plain: "商品一覧の答えに、サムネイルの住所（/media/thumbs/1.jpg）を入れる。", detail: "値は thumbnail 列から取る（alias）。列の中身は Django の FieldFile で、Ninja が .url（MEDIA_URL ＋ 名前）に変える。サムネイルの無い商品は null。", cmd: "curl -s localhost:8000/api/products" },
   api: { kind: "箱（コンテナ）", name: "api", formal: "service / container（Django + Django Ninja）", plain: "窓口。アプリのコードがあり、画面や curl からの頼みを受ける。", detail: "front と back の両方の道にいる、ただ1つの箱。起動命令はイメージの CMD（runserver）のまま。", cmd: "docker compose logs --since 1m api" },
   worker: { kind: "箱（コンテナ）", name: "worker", formal: "Celery worker", plain: "裏方。受付箱（Redis の 1番の部屋）を見張り、仕事のメモが来たら仕事をする。", detail: "api と同じイメージ ec-api:dev。command: で起動命令を celery worker に置き換えている。窓口（ports）は無い。中には受付係（MainProcess）がメモを取り出し、作業係（ForkPoolWorker）が仕事をする。", cmd: "docker compose logs -f --since 1m worker" },
   db: { kind: "箱（コンテナ）", name: "db", formal: "MySQL 8.4（RDBMS: リレーショナルデータベース）", plain: "消えたら困るデータ（商品）を、ディスクにずっと取っておく。", detail: "2秒ごとにヘルスチェック（mysqladmin ping）を受けている。6c から、商品の image 列に画像のパス（文字）が入る。", cmd: "docker compose exec db mysql -uec -pec-pass ec" },
@@ -274,6 +281,8 @@ const GROWTH = [
     can: ["make_thumbnail(1) と .delay(1) で、仕事をする箱の違いを説明できる", "worker を止めて送るとメモが受付箱にたまることを予想し、2 → 0 で確かめた", "@app.task が .delay() を付け足していることを、エラーから言えた", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
   { tag: "6f", title: "サムネイルを作る", when: "11/19",
     can: ["worker が db から「画像の場所」、倉庫から「画像そのもの」を読むことを説明できる", "Unknown column が出たら、migrate 忘れだと分かる", "worker が作ったサムネイルが api から見える理由を、倉庫 media で説明できる", "api が worker の失敗に気づかない理由を、非同期で説明できる", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
+  { tag: "6g", title: "画面に出す", when: "11/21",
+    can: ["ブラウザは Mac で動くので api という名前を使えず、道 front にいる web が中継することを説明できる", "200 でも Content-Type が text/html なら画像ではないと見分けられる", "COPY で入ったファイルは restart ではなく --build が要る理由を、Dockerfile と compose.yaml で示せる", "DEBUG = False で /media が 404 になる理由を言える"] },
 ];
 
 const LOOKUP = [
@@ -298,6 +307,10 @@ const LOOKUP = [
   ["worker から db に届くか（worker の中で1行試す）", "docker compose exec worker .venv/bin/python src/manage.py shell -c \"...\"", "p4-6f"],
   ["db の商品の行に何が書かれたか", "docker compose exec db mysql -uec -pec-pass ec -e \"SELECT id, image, thumbnail FROM catalog_product\"", "p4-6f"],
   ["箱の中のファイルを Mac で見る", "docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg → open /tmp/thumb.jpg", "p4-6f"],
+  ["api の箱が画像を返せるか", "curl -s -I localhost:8000/media/thumbs/1.jpg（200 と image/jpeg）", "p4-6g"],
+  ["ブラウザが行く先で画像が返るか", "curl -s -I localhost:5173/media/thumbs/1.jpg（text/html なら web が中継していない）", "p4-6g"],
+  ["Django がその URL をどう扱ったか", "docker compose logs --since 1m api | grep media（最後の数字 200 / 404）", "p4-6g"],
+  ["web の設定（vite.config.js）を変えたあと", "docker compose up -d --build web", "p4-6g"],
 ];
 
 let stepIdx = STEPS.length - 1;
@@ -341,6 +354,8 @@ function svg(i) {
   if (has(1)) apiB.push({ dot: "dot-conf", t: "BROKER_URL → 1番の部屋", code: true, k: "api-broker" });
   if (has(3)) apiB.push({ dot: "dot-conf", t: "POST …/products/{id}/image", code: true, k: "api-endpoint" });
   if (has(5)) apiB.push({ dot: "dot-conf", t: "保存のあと .delay(product.id)", code: true, k: "api-delay", info: "delay" });
+  if (has(7)) apiB.push({ dot: "dot-store", t: "GET /media/… → 倉庫のファイル", code: true, k: "api-mediaurl", info: "mediaurl" });
+  if (has(7)) apiB.push({ dot: "dot-conf", t: "一覧に thumbnail_url", code: true, k: "api-thumburl", info: "thumburl" });
 
   const workerB = [
     { dot: "dot-conf", t: "command: celery worker", code: true },
@@ -361,7 +376,7 @@ function svg(i) {
   <svg viewBox="0 0 1000 720" xmlns="http://www.w3.org/2000/svg" font-family="Zen Kaku Gothic New, Hiragino Sans, sans-serif">
     <defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path class="arrowhead" d="M0 0 L10 5 L0 10 z"/></marker></defs>
     <text class="region-label" x="20" y="22">MAC（あなたのパソコン）</text>
-    ${chip(null, 20, 34, 120, "ブラウザ")}
+    ${chip("browser", 20, 34, 120, "ブラウザ")}
     ${chip(null, 160, 34, 90, "curl")}
     ${chip(null, 270, 34, 90, "Zed")}
     ${chip("src", 410, 34, 190, "フォルダ apps/api/src", true)}
@@ -381,7 +396,7 @@ function svg(i) {
     </g>
 
     <!-- 窓口 -->
-    <path class="wire" d="M80 68 C 80 120, 130 140, 130 196"/>
+    <path class="${wcls("w-5173", "")}" d="M80 68 C 80 120, 130 140, 130 196"/>
     ${port(92, 112, ":5173")}
     <path class="wire" d="M205 68 C 205 180, 360 220, 360 ${404 - apiH + 0}"/>
     ${port(214, 112, ":8000")}
@@ -397,7 +412,8 @@ function svg(i) {
     ${has(2) ? `<path class="${wcls("w-src-worker", "mount")}" d="M600 52 C 640 52, 560 300, 560 470 L 560 520 L 530 520"/>` : ""}
 
     <!-- アプリのつながり -->
-    <path class="wire app" d="M240 240 C 280 240, 290 ${404 - apiH / 2}, 316 ${404 - apiH / 2}"/>
+    <path class="${wcls("w-web-api", "app")}" d="M240 240 C 280 240, 290 ${404 - apiH / 2}, 316 ${404 - apiH / 2}"/>
+    ${has(7) ? `<text class="port ${H.has("w-web-api") ? "hl-text" : ""}" x="150" y="300">/api・/media を中継</text>` : ""}
     <path class="wire app" d="M528 370 C 560 370, 580 384, 606 384"/>
     <path class="${wcls("w-api-redis", "app")}" d="M528 330 C 640 300, 760 300, 800 342"/>
     ${has(2) ? `<path class="${wcls("w-watch", "watch")}" d="M532 500 C 700 500, 860 480, 880 ${428 + (redisB.length - 1) * 17}"/>
@@ -412,7 +428,7 @@ function svg(i) {
     ${has(6) ? `<path class="${wcls("w-worker-db", "app")}" d="M528 470 C 590 470, 640 470, 650 ${342 + 52 + dbB.length * 17}" marker-end="url(#ah)" marker-start="url(#ah)"/>
        <text class="port ${H.has("w-worker-db") ? "hl-text" : ""}" x="664" y="${342 + 52 + dbB.length * 17 + 30}">商品を読む・場所を書く</text>` : ""}
 
-    ${box("web", 50, 196, 190, 86, "web", null, [{ dot: "dot-src", t: "画面（React）" }])}
+    ${box("web", 50, 196, 190, 86, "web", null, has(7) ? [{ dot: "dot-src", t: "画面（React）を配る" }, { dot: "dot-conf", t: "proxy → api:8000", code: true, k: "web-proxy", info: "proxy" }] : [{ dot: "dot-src", t: "画面（React）" }])}
     ${box("api", 316, 404 - apiH, 212, apiH, "api", has(2) ? { t: "ec-api:dev", k: "api-image" } : null, apiB)}
     ${has(2) ? box("worker", 316, 448, 212, 52 + workerB.length * 17, "worker", { t: "ec-api:dev" }, workerB) : ""}
     ${box("db", 606, 342, 170, 52 + dbB.length * 17, "db", { t: "mysql:8.4" }, dbB)}
@@ -481,7 +497,7 @@ function renderGrowth() {
     <article class="card"><span class="when">${esc(g.tag)} ・ ${esc(g.when)}</span><h3>${esc(g.title)}</h3>
       <ul>${g.can.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
       ${g.note ? `<blockquote>${esc(g.note)}</blockquote>` : ""}</article>`).join("")
-    + `<article class="card next"><span class="when">次</span><h3>6g 画面にサムネイルを出す</h3><p style="margin:0">倉庫の中のサムネイルを、ブラウザ（web）から見えるようにする。</p></article>`;
+    + `<article class="card next"><span class="when">次</span><h3>6h 止めるとき待たせる</h3><p style="margin:0">worker がサムネイルを作っている途中で止められても、仕事を最後まで終わらせてから止まるようにする。</p></article>`;
 }
 
 function renderLookup() {
