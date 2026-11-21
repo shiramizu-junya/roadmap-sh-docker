@@ -1,0 +1,7 @@
+services:
+    api:
+        build: "."
+        ports:
+            - "3000:8000"
+        volumes:
+            - "./src:/app/src"

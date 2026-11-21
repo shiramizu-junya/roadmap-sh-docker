@@ -1,0 +1,9 @@
+[project]
+name = "multi-container-service"
+version = "0.1.0"
+requires-python = ">=3.13"
+dependencies = [
+    "django>=5.2,<5.3",
+    "django-ninja>=1.7,<1.8",
+    "mysqlclient>=2.3,<2.4",
+]
