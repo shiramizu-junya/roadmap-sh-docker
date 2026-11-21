@@ -232,12 +232,14 @@ const STEPS = [
     q: "ブラウザ（Mac）は、どの道を通って、倉庫の中のサムネイルを取りに行けばいいのか？",
     changes: ["Django が /media/... の頼みに、倉庫 media のファイルを返す（MEDIA_URL と static()。開発中だけ）", "商品一覧の答えに thumbnail_url（画像の住所）を入れた", "web の箱の Vite が、/api に加えて /media も api:8000 へ中継する（あなたが C を選んだ）", "React はブラウザ（Mac）で動くので、http://api:8000 は使えない。vite.config.js はイメージに入っているので up -d --build web で作り直す"],
     hl: ["browser", "w-5173", "web-proxy", "w-web-api", "api-mediaurl", "api-thumburl", "w-api-media"] },
+  { id: "p4-6h", tag: "6h", title: "止めるとき待たせる",
+    q: "worker を止めるとき、いまやっている仕事が終わるまで待たせるには、どうすればいいのか？",
+    changes: ["docker compose stop は PID 1（celery）に SIGTERM を送り、時間切れで SIGKILL する（この Mac では約3秒、公式は 10 秒）", "Celery は SIGTERM で「いまの仕事を終えてから止まる」（Warm shutdown）。でも間に合わないと Exited (137) で、仕事は消える", "worker に stop_grace_period: 30s を足し、仕事が終わるまで待たせた → Exited (0)（あなたが B を選んだ）", "PID 1 が sh だと SIGTERM が celery に届かず、30 秒待って殺される（P2-5 の exec）"],
+    hl: ["worker-stop", "worker-cmd"] },
 ];
 // 読み手が終えたステップ（成長の記録の数に使う）
-const DONE_UNTIL = "p4-6g";
-const FUTURE = [
-  { tag: "6h", title: "止めるとき待たせる" },
-];
+const DONE_UNTIL = "p4-6h";
+const FUTURE = [];
 
 const INFO = {
   web: { kind: "箱（コンテナ）", name: "web", formal: "service / container（Vite の開発サーバ）", plain: "画面の係。ブラウザに React の画面（JavaScript）を配る。", detail: "道は front だけ。db や redis へは、必ず api を通る。配った React のコードは、web の箱ではなくブラウザ（Mac）の中で動く。ブラウザからの /api と /media（6g から）は、Vite の proxy が api:8000 へ中継する。", cmd: "docker compose logs web" },
@@ -256,6 +258,7 @@ const INFO = {
   delay: { kind: "api のコード", name: "make_thumbnail.delay(product.id)", formal: "Task.delay()（Celery）", plain: "仕事を今やらず、「この仕事を、この引数で」というメモにして受付箱に入れる。", detail: "api は画像を保存したあとにこれを呼び、すぐ saved と返す。.delay を外して make_thumbnail(product.id) と呼ぶと、api がその場で仕事をしてしまう。.delay は @app.task が関数に付けた道具なので、@app.task を消すと AttributeError: 'function' object has no attribute 'delay' になる。", cmd: "docker compose logs --since 1m api" },
   task: { kind: "worker の仕事", name: "catalog.tasks.make_thumbnail", formal: "task（Celery）", plain: "worker に任せる仕事1つ分。中身はふつうの Python の関数に @app.task を付けたもの。", detail: "worker は起動のとき、config/celery.py の app.autodiscover_tasks() で各アプリの tasks.py を探し、仕事の名簿（task registry）に載せる。名簿に無い仕事のメモが来ると「Received unregistered task」と言って捨てる。worker はコードを自分で読み直さないので、.py を変えたら docker compose restart worker。", cmd: "docker compose exec worker .venv/bin/celery --workdir src -A config inspect registered" },
   memo: { kind: "受付箱に入るもの", name: "メモ", formal: "message（task message）", plain: "受付箱に入れるメモ1枚。「どの仕事を・どの引数で」だけが書いてある。画像そのものは入っていない。", detail: "Redis の 1番の部屋の、リスト celery に JSON で入る。worker が動いていると一瞬で取り出されるので、worker を止めて送ると、たまる様子が見える。", cmd: "docker compose exec redis redis-cli -n 1 LLEN celery" },
+  stopgrace: { kind: "worker の止まり方（6h）", name: "stop_grace_period: 30s", formal: "Compose の stop_grace_period ／ Celery の warm shutdown ／ シグナル SIGTERM・SIGKILL", plain: "止めるときは、いまの仕事が終わるまで最大 30 秒待つ。", detail: "docker compose stop は、箱の PID 1（celery）に SIGTERM を送る。Celery は新しいメモを取らず、いまの仕事を終えてから止まる（Warm shutdown）。Docker が待つのは stop_grace_period まで。過ぎたら SIGKILL で Exited (137)、途中の仕事は消える（メモは仕事を始めた時点で受付箱から消えている）。仕事が無ければ 30 秒は待たず、すぐ Exited (0)。PID 1 が sh だと SIGTERM が celery に届かない。", cmd: "docker inspect roadmap-sh-docker-worker-1 --format '{{.Config.StopTimeout}}'" },
   thumbjob: { kind: "worker の仕事の中身", name: "make_thumbnail（6f）", formal: "Pillow の Image.open() / Image.thumbnail()、Django の ContentFile と FieldFile.save()", plain: "db から商品を読み、倉庫の元画像を開いて縦横 200 以内に縮め、thumbs/ に保存して、db に場所を書く。", detail: "worker は back の道で db と話せる（.env の DB_HOST=db）。元画像は倉庫 media にあるので開ける。worker から倉庫 media を外すと FileNotFoundError で失敗するが、api はメモを入れたらすぐ返事をするので saved を返したまま。失敗は worker のログ（ERROR と Traceback）にだけ出る。", cmd: "docker compose logs --since 1m worker" },
   thumbcol: { kind: "db の列", name: "catalog_product.thumbnail", formal: "ImageField（db では varchar(100)）", plain: "サムネイルの場所（例: thumbs/1.jpg）を書く文字の列。画像そのものは入っていない。", detail: "models.py に1行足し、makemigrations → migrate を api から1回打って作った。migrate の前に api だけ新しい models.py を読むと、Unknown column 'catalog_product.thumbnail' で 500 になる。", cmd: "docker compose exec db mysql -uec -pec-pass ec -e \"SELECT id, image, thumbnail FROM catalog_product\"" },
   "redis-none": { kind: "倉庫", name: "（redis には倉庫なし）", formal: "—", plain: "redis の中身は箱の中にしか無い。", detail: "11/15 に cart:test を入れてから箱を作り直し、消えることを確かめた。", cmd: "docker compose exec redis redis-cli -n 0 KEYS '*'" },
@@ -283,6 +286,8 @@ const GROWTH = [
     can: ["worker が db から「画像の場所」、倉庫から「画像そのもの」を読むことを説明できる", "Unknown column が出たら、migrate 忘れだと分かる", "worker が作ったサムネイルが api から見える理由を、倉庫 media で説明できる", "api が worker の失敗に気づかない理由を、非同期で説明できる", "直し方を、教材の答えを見る前に自分で選べた（B）"] },
   { tag: "6g", title: "画面に出す", when: "11/21",
     can: ["ブラウザは Mac で動くので api という名前を使えず、道 front にいる web が中継することを説明できる", "200 でも Content-Type が text/html なら画像ではないと見分けられる", "COPY で入ったファイルは restart ではなく --build が要る理由を、Dockerfile と compose.yaml で示せる", "DEBUG = False で /media が 404 になる理由を言える"] },
+  { tag: "6h", title: "止めるとき待たせる", when: "11/21",
+    can: ["仕事の途中で stop すると、仕事が切られてメモも消えることを確かめた", "stop_grace_period で、仕事を終えてから止まらせられる", "Exited (0) と (137) の違いから、止まり方を読める"] },
 ];
 
 const LOOKUP = [
@@ -311,6 +316,9 @@ const LOOKUP = [
   ["ブラウザが行く先で画像が返るか", "curl -s -I localhost:5173/media/thumbs/1.jpg（text/html なら web が中継していない）", "p4-6g"],
   ["Django がその URL をどう扱ったか", "docker compose logs --since 1m api | grep media（最後の数字 200 / 404）", "p4-6g"],
   ["web の設定（vite.config.js）を変えたあと", "docker compose up -d --build web", "p4-6g"],
+  ["箱がどう止まったか", "docker compose ps -a worker --format '{{.Status}}'（Exited (0) = 自分で止まれた／137 = 時間切れで SIGKILL）", "p4-6h"],
+  ["止めるとき何秒待つ設定か", "docker inspect roadmap-sh-docker-worker-1 --format '{{.Config.StopTimeout}}'", "p4-6h"],
+  ["箱の中の PID 1 は何か", "docker compose exec worker sh -c 'cat /proc/1/cmdline | tr \"\\0\" \" \"; echo'", "p4-6h"],
 ];
 
 let stepIdx = STEPS.length - 1;
@@ -358,12 +366,13 @@ function svg(i) {
   if (has(7)) apiB.push({ dot: "dot-conf", t: "一覧に thumbnail_url", code: true, k: "api-thumburl", info: "thumburl" });
 
   const workerB = [
-    { dot: "dot-conf", t: "command: celery worker", code: true },
+    { dot: "dot-conf", t: "command: celery worker", code: true, k: "worker-cmd" },
     { dot: "dot-src", t: "/app/src ⇐ Mac", code: true },
   ];
   if (has(4)) workerB.push({ dot: "dot-store", t: "/app/media ⇐ 倉庫 media", code: true, k: "worker-media" });
   if (has(5)) workerB.push({ dot: "dot-conf", t: "仕事: make_thumbnail", code: true, k: "worker-task", info: "task" });
   if (has(6)) workerB.push({ dot: "dot-conf", t: "開く → 縮める → thumbs/ に保存", code: true, k: "worker-thumb", info: "thumbjob" });
+  if (has(8)) workerB.push({ dot: "dot-warn", t: "stop_grace_period: 30s", code: true, k: "worker-stop", info: "stopgrace" });
 
   const redisB = [{ dot: "dot-conf", t: "0番の部屋: カート", k: "room0" }];
   if (has(1)) redisB.push({ dot: "dot-conf", t: "1番の部屋: 受付箱", k: "room1" });
@@ -497,7 +506,7 @@ function renderGrowth() {
     <article class="card"><span class="when">${esc(g.tag)} ・ ${esc(g.when)}</span><h3>${esc(g.title)}</h3>
       <ul>${g.can.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
       ${g.note ? `<blockquote>${esc(g.note)}</blockquote>` : ""}</article>`).join("")
-    + `<article class="card next"><span class="when">次</span><h3>6h 止めるとき待たせる</h3><p style="margin:0">worker がサムネイルを作っている途中で止められても、仕事を最後まで終わらせてから止まるようにする。</p></article>`;
+    + `<article class="card next"><span class="when">次</span><h3>PJ2 Multi-Container Application</h3><p style="margin:0">P4 で覚えたことを使って、Todo API と MySQL を compose.yaml 1つで自分で組み立てる。</p></article>`;
 }
 
 function renderLookup() {

@@ -1745,7 +1745,7 @@ curl -s localhost:5173/api/cart
 | P4-6g     | 画面にサムネイルを出す                        | ⑤        |
 | P4-6h     | worker を止めるとき、仕事が終わるまで待たせる | ③④       |
 
-P4-6b 以降は、P4-6a が終わってから作ります。
+P4-6a〜6h は、1つずつ作りました（2026-11-14〜11-21）。
 
 ---
 
@@ -5407,7 +5407,554 @@ api の箱（Django）
 **残った問い**: これで、画像を送ってから画面に出るまでが全部つながった。でも、worker がサムネイルを作っている**途中で** `docker compose stop` や作り直しをしたら、その仕事はどうなるのか？ 途中で切られたら、サムネイルは中途半端なまま残らないか？
 
 ---
-▶ **次**: P4-6h worker を止めるとき、仕事が終わるまで待たせる（まだ作っていません。P4-6g が終わったら作ります）
+▶ **次**: P4-6h worker を止めるとき、仕事が終わるまで待たせる
+
+---
+
+## P4-6h: 止めるとき待たせる
+
+**❓ この回の問い**: 前回（P4-6g）で、画像を送ってから画面に出るまでが全部つながった。でも、worker がサムネイルを作っている**途中で** `docker compose stop` をしたら、その仕事はどうなるのか？
+→ **worker を止めるとき、いまやっている仕事が終わるまで待たせるには、どうすればいいのか？**
+
+**作ること / 確かめること**: 仕事をわざと長くして、途中で止めると仕事が**消えてしまう**ことを確かめる。`compose.yaml` の worker に `stop_grace_period:` を足し、仕事が終わるまで待ってから止まることを確かめる
+**重要度**: 🔴 毎日使う — コードを直して作り直すたびに、worker は止められる。待たせないと、そのたびに仕事が消えるから
+**前ステップとの接続**: P2-5 で見た「止める合図（SIGTERM）と時間切れ（SIGKILL）」を、worker で使う。変えるのは `apps/api/src/catalog/tasks.py`（一時的）と `compose.yaml` の worker
+
+**P4-6 ぜんたいの地図での位置**: ③④（worker がメモを取り出して、サムネイルを作っている最中）
+
+> ⚠️ **この回は、ふつうの起動の worker で進めます。** デバッグ用の設定（`compose.debug.yaml`）で起動した worker は、箱の中の最初のプログラムが debugpy になるので、止まり方が変わります。デバッグ用で起動していたら、先に `docker compose up -d worker` で作り直してください。
+
+### 🔁 前回の思い出し
+
+**問い**: P4-6g で `vite.config.js` を書き換えたとき、保存しても `restart web` をしても効かず、`up -d --build web` でやっと効きました。なぜでしたか？ 一言で。
+
+<details><summary>答え</summary>
+
+`vite.config.js` は、`apps/web/Dockerfile` の `COPY . .` で**イメージを作るときに**入れたものだからです。`restart` は同じイメージから箱を動かし直すだけなので、中のコピーは古いままでした。今日も「`compose.yaml` に書いたことが、いつ箱に届くか」を考える場面が出てきます。
+
+</details>
+
+### 🛠️ 先に自分で決める
+
+教材が答えを出す前に、**あなたが止め方を決めます。** このあとのチャンクは、あなたの選んだ方針の答え合わせとして進みます。
+
+**困りごと**（P4-6g の残った問い）
+
+- コードを直したとき、`compose.yaml` を変えたとき、Mac を閉じる前など、worker は**しょっちゅう止められます**
+- 止められた瞬間に、worker がサムネイルを作っている途中だったら？
+
+**🤔 worker が仕事の途中で「止まって」と言われたら、どうしてほしいですか？** 1つ選んで、理由を一言で書いてください（「分からない」でも大丈夫です）。
+
+| 案 | 止まり方 |
+| --- | --- |
+| A | すぐ止まる（仕事は途中で捨てる） |
+| B | いまの仕事を終えてから止まる（新しいメモは取らない） |
+| C | 仕事をやめて、メモを受付箱に**戻してから**止まる（次に起動した worker が最初からやり直す） |
+
+<details><summary>ヒント</summary>
+
+1. A を選ぶと、6e〜6f で入れたメモはどうなるでしょう？ 画像は保存されたのに、サムネイルは？
+2. サムネイル1枚を作るのにかかる時間は、ふつう1秒もかかりません。少し待つのと、作り直すのと、どちらが簡単でしょう？
+
+</details>
+
+<details><summary>答え合わせ</summary>
+
+この教材は **B** で進めます。
+
+| 案 | 判定 | 理由 |
+| --- | --- | --- |
+| A | ✗ | メモはもう受付箱から取り出してあるので、**仕事が消えます**。画像はあるのにサムネイルが無いまま残ります |
+| B | ◎ | 1つの仕事が短い（サムネイルなら1秒以下）ので、少し待てば済みます。Celery の worker は、止める合図を受けると**もともと B の動き**をします（チャンク1） |
+| C | ○ | 長い仕事（動画の変換など）では、こちらが向いています。ただし、**同じ仕事が2回動いても困らない作り**が要ります。この教材では名前だけ紹介します（下の 🏢） |
+
+> 🏢 **実務メモ**: C は Celery の **`acks_late`**（受け取りの確認を、仕事が**終わってから**送る設定）で作れます。途中で止まった仕事のメモは受付箱に戻り、別の worker がもう一度最初から実行します。そのため、2回実行しても結果が同じになる作り（**冪等 / idempotent**）にしておく必要があります。
+> 根拠: https://docs.celeryq.dev/en/stable/userguide/tasks.html#Task.acks_late
+
+ただし、B にするには **Docker 側**の設定が1行要ります。Celery が「終わるまで待って」と頑張っても、Docker が時間切れで強制終了してしまうからです。それをチャンク1で見て、チャンク2で直します。
+
+</details>
+
+### 🐳 Docker の中の図
+
+動く図のページ（`docs/visual/docker-inside.html`。ブラウザで `open docs/visual/docker-inside.html`）で、**「6g」と「6h」のボタンを交互に押して**比べてください。赤く光るのが今日変わる所です。**worker の箱**に「止める合図を受けたら、いまの仕事を終えてから止まる（最大30秒待つ）」が増えます。箱・道・倉庫は増えません。
+
+### 🧭 全体の中のいま
+
+`docs/02-system-map.md` の「1枚の地図」に、今日さわる所を ★ で示します。
+
+```text
+Mac の道具       窓口（④）              Docker の中
+
+                                        【道 front】 web・api
+ブラウザ      ── :5173 どこからでも ──▶ web ──▶ api（画面から API を呼ぶ）
+curl          ── :8000 どこからでも ──▶ api
+
+                                        【道 back】 api・worker・db・redis
+                                        api ──▶ redis の 1番にメモを入れる
+（窓口なし）                            worker ──▶ redis の 1番を見張る
+                                        worker を止めるとき、仕事が終わるまで待つ  ★ 今日
+                                        api・worker ──▶ 倉庫 media（画像。消えない）
+```
+
+**見てほしいところ**: 今日も**新しい箱・道・倉庫・窓口は増えません。** 変わるのは、worker の箱の**止まり方**だけです。
+
+### 🗺️ 今日の地図
+
+```text
+あなた：docker compose stop worker
+        │
+        ▼
+Docker：worker の箱の PID 1 に SIGTERM（止まってください）を送る
+        │                                        ← PID 1 が celery であること（P2-5 の exec）  … 🧪
+        ▼
+Celery：新しいメモは取らない。いまの仕事を終えてから止まる（Warm shutdown）   … チャンク1 で見る
+        │
+        ▼
+Docker：待つのは stop_grace_period まで。過ぎたら SIGKILL（強制終了）         … チャンク2（compose.yaml）
+        │
+        ▼
+仕事が終わった → Exited (0)   ／   間に合わなかった → Exited (137)・仕事は消える
+```
+
+**見てほしいところ**: 止めるときは、**Docker と Celery の2人**が関わります。Celery は「待って」と言える。でも、**どこまで待つかを決めるのは Docker** です。
+
+### 6h-0. このステップの初出
+
+**Docker**: `stop_grace_period`
+**Celery**: Warm shutdown（`worker: Warm shutdown (MainProcess)` というログ）
+**Python**: `time.sleep()`（実験のために一時的に使う）
+
+---
+
+### チャンク1: 仕事をわざと長くして、途中で止めてみる（`apps/api/src/catalog/tasks.py`）— 地図の Celery と Docker の段
+
+**このチャンクの目的**: サムネイル作りは一瞬で終わるので、「途中で止める」を試せません。**一時的に** 15 秒かかる仕事にして、いまの止まり方を見ます。この2行は、チャンク3で消します。
+
+**🤔 先に考える**: 15 秒かかる仕事の途中で `docker compose stop worker` を打ったら、仕事は最後まで終わると思いますか？
+A. 終わる（Celery は終わるまで待つから）　B. 途中で切られる
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: P2-5 で、`docker stop` は SIGTERM を送ったあと、**何秒**待ちましたか？ 待っても止まらないと、次に何を送りましたか？
+
+<details><summary>答え</summary>
+
+**B（途中で切られる）** です。Celery は待とうとします。でも Docker が時間切れで **SIGKILL**（強制終了）を送ります。待つ時間は、公式の既定では **10 秒**、この Mac では**約3秒**でした（P2-5 の 💡 と同じ。原因は特定できていません）。どちらにしても 15 秒には足りません。
+
+</details>
+
+**🎯 書くもの**: `tasks.py` のいちばん上に「時間を扱う道具を読み込む」1行、`make_thumbnail` の中身のいちばん上に「15 秒何もせず待つ」1行。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `import time` | インポート タイム（標準ライブラリ **`time`**） | 時間を扱う道具箱を読み込む | 無いと `NameError: name 'time' is not defined` |
+| `time.sleep(15)` | タイム スリープ（**`time.sleep()`**） | 15 秒、何もせず待つ。重い仕事の**ふり** | 数字を変えると、待つ秒数が変わる |
+| `# 一時的` のコメント | — | あとで消すための目印 | 無くても動くが、消し忘れやすい |
+
+**✍️ 自分で書く**（はじめての形なので、下を見ながら**手で打ちます**）
+
+`apps/api/src/catalog/tasks.py`（打つのは2行。`#` のコメントは付けても付けなくても構いません）:
+
+```python
+import time
+
+from django.core.files.base import ContentFile
+```
+
+```python
+def make_thumbnail(product_id):
+    time.sleep(15)  # 一時的: 長い仕事のふり（チャンク3 で消す）
+    product = Product.objects.get(id=product_id)
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
++import time
++
+ from django.core.files.base import ContentFile
+ from PIL import Image
+```
+
+```diff
+ @app.task
+ def make_thumbnail(product_id):
++    time.sleep(15)  # 一時的: 長い仕事のふり（チャンク3 で消す）
+     product = Product.objects.get(id=product_id)
+     img = Image.open(product.image)
+```
+
+</details>
+
+**▶️ 確かめる**: worker は保存しただけではコードを読み直さないので、まず**起動し直します**（コマンドは自分で思い出して打ちます）。そのあと、tmux のペインを2つ使います。
+
+1. 左のペイン: worker のログを流す（`docker compose logs -f --since 1m worker`）
+2. 右のペイン: 画像を送って、**すぐに**止める（15 秒以内に打つ）
+
+```bash
+curl -s -F image=@/tmp/sample.jpg localhost:8000/api/products/1/image
+time docker compose stop worker
+docker compose ps -a worker --format '{{.Status}}'
+```
+
+<details><summary>ヒント: 起動し直すコマンド</summary>
+
+`docker compose restart worker`
+
+</details>
+
+```text
+{"status": "saved"}
+docker compose stop worker  0.06s user 0.03s system 1% cpu 3.221 total
+Exited (137) Less than a second ago
+```
+
+左のペイン（worker のログ）:
+
+```text
+... Task catalog.tasks.make_thumbnail[0867f66c-...] received
+
+worker: Warm shutdown (MainProcess)
+```
+
+✅ 検証済み: Docker Engine 29.8.0 / Docker Compose v5.5.1 / Celery 5.6.3（2026-11-21。手元と同じファイルを別の場所に写し、プロジェクト名 `p46h-verify` で確認した。`time` の表示は zsh の形）
+
+| 見えたもの | 意味 |
+| --- | --- |
+| `{"status": "saved"}` がすぐ返る | api はメモを入れただけ（6e）。15 秒の仕事を待たない |
+| `Warm shutdown` | Celery は SIGTERM を受け取り、「いまの仕事を終えてから止まる」準備に入った |
+| `succeeded` の行が**無い** | でも仕事は終わらなかった |
+| `3.221 total` と `Exited (137)` | 約3秒で Docker が SIGKILL を送った（137 = 128 + 9。P1-4） |
+
+**メモは受付箱に戻ったでしょうか？** 確かめます。
+
+```bash
+docker compose exec redis redis-cli -n 1 LLEN celery
+docker compose start worker
+```
+
+```text
+(integer) 0
+```
+
+✅ 検証済み: 2026-11-21（worker を起動して 20 秒待っても、ログに `received` は出ず、サムネイルも作られなかった）
+
+**仕事は消えました。** worker は、仕事を**始めるときに**「受け取りました」と受付箱に伝えます（受け取りの確認 / acknowledgement）。だから、途中で殺されると、メモはもうどこにもありません。
+
+**🔎 答えの見つけ方**: 「箱がどう止まったか」は、`docker compose ps -a` の **Exited のあとの数字**を見る。`0` なら自分で止まれた。`137` なら時間切れで殺された。
+
+**📖 しくみ**
+
+- **何をしているか**: 仕事の途中で worker を止め、止まり方（`Exited (137)`）と、仕事が消えることを見ました。
+- **なぜ必要か**: 止まり方を知らないと、「画像はあるのにサムネイルが無い」ことが、たまに、理由も分からず起きます。ログにエラーも出ません。
+- **どういう原理で動くか**:
+  1. **あなた**が `docker compose stop worker` を打つ
+  2. **Docker** が、worker の箱の **PID 1**（箱の中の最初のプログラム = celery）に **SIGTERM** を送る
+  3. **Celery** は新しいメモを取るのをやめ、いまの仕事が終わるのを待つ（**Warm shutdown**）
+  4. **Docker** は決まった秒数だけ待つ。過ぎたら **SIGKILL** を送り、celery を問答無用で止める
+  5. 仕事は途中で終わり、メモは受付箱にもう無いので、**消える**
+
+> 📇 **Warm shutdown** — 正式名称: Celery の **warm shutdown**（ウォーム シャットダウン）
+> かみくだくと: 「いまの仕事は終わらせてから、店じまいする」止まり方。
+> 似た言葉との違い: **cold shutdown** = 仕事の途中でもすぐ止まる。Celery は SIGTERM を受けると warm、SIGQUIT を受けると cold になる。
+> この教材では: `docker compose stop worker` を打つと、ログに `worker: Warm shutdown (MainProcess)` と出る。
+> 根拠: https://docs.celeryq.dev/en/stable/userguide/workers.html#stopping-the-worker
+
+---
+
+### チャンク2: worker が止まるまで、長めに待たせる（`compose.yaml` の `worker`）— 地図の Docker の段
+
+**このチャンクの目的**: Celery は「待って」と言えています。足りないのは、**Docker が待つ時間**です。worker の箱だけ、待つ時間を 30 秒に延ばします。
+
+**🤔 先に考える**: `compose.yaml` に1行足したあと、worker に届けるには何が要ると思いますか？
+A. 保存するだけ　B. `docker compose restart worker`　C. `docker compose up -d worker`
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: P4-6g の 🔁 を思い出します。`restart` は、**同じもの**から箱を動かし直すだけでした。待つ時間は、箱を**作るとき**に決まる設定です。
+
+<details><summary>答え</summary>
+
+**C（`up -d worker`）** です。`restart` は、いまある箱をそのまま動かし直すだけで、`compose.yaml` の変更を読みません（Docker の公式ドキュメントにも書いてあります: https://docs.docker.com/reference/cli/docker/compose/restart/ ）。`up -d` は、設定が変わった箱を**作り直します**。`env_file:` を変えたときと同じです（`docs/02-system-map.md` の「つまずきメモ」）。
+
+</details>
+
+**🎯 書くもの**: `compose.yaml` の worker の中、`networks:` と `command:` のあいだに、「止めるときは 30 秒まで待つ」1行。
+
+**🔬 1行ずつ分解**（はじめて書く形なので、打つ前に読みます）:
+
+| 部品 | 読み方（正式名称） | 意味 | 無いと / 変えるとどうなる |
+| --- | --- | --- | --- |
+| `stop_grace_period:` | ストップ グレース ピリオド（**`stop_grace_period`**） | 止める合図（SIGTERM）を送ってから、強制終了（SIGKILL）するまでの**猶予** | 無いと Docker の既定（公式は 10 秒。この Mac では約3秒） |
+| `30s` | 30 セカンズ | 30 秒。`1m30s` のようにも書ける | 仕事より短いと、チャンク1 と同じく途中で切られる |
+
+**✍️ 自分で書く**（はじめての形なので、下を見ながら**手で打ちます**）
+
+```yaml
+        networks:
+            - back
+        stop_grace_period: 30s
+        command: [".venv/bin/celery", ...]
+```
+
+<details><summary>答え合わせ（差分。前後2行つき）</summary>
+
+```diff
+         networks:
+             - back
++        stop_grace_period: 30s
+         command: [".venv/bin/celery", "--workdir", "src", "-A", "config", "worker", "--loglevel", "info"]
+```
+
+</details>
+
+**▶️ 確かめる**: 書き方を確かめて、worker を**作り直し**ます（🤔 の答え）。
+
+```bash
+docker compose config --quiet
+docker compose up -d worker
+```
+
+次に、チャンク1 と同じことをもう一度します（左のペインで worker のログを流し、右のペインで画像を送ってすぐ止める。コマンドは自分で思い出して打ちます）。
+
+```text
+{"status": "saved"}
+docker compose stop worker  0.06s user 0.04s system 0% cpu 15.120 total
+Exited (0) Less than a second ago
+```
+
+左のペイン（worker のログ）:
+
+```text
+... Task catalog.tasks.make_thumbnail[0e9c17e6-...] received
+
+worker: Warm shutdown (MainProcess)
+... Task catalog.tasks.make_thumbnail[0e9c17e6-...] succeeded in 15.077899049000735s: '商品 1 の画像は (200, 133)'
+```
+
+✅ 検証済み: 2026-11-21
+
+`Warm shutdown` の**あとに** `succeeded` が出て、`Exited (0)` になりました。`stop` は、仕事が終わるまで（約15秒）待ってから返ってきました。
+
+**🔎 答えの見つけ方**: 「この箱は、止めるとき何秒待つ設定か」は、箱の設定を直接見る。
+
+```bash
+docker inspect roadmap-sh-docker-worker-1 --format '{{.Config.StopTimeout}}'
+```
+
+```text
+30
+```
+
+✅ 検証済み: 2026-11-21（`stop_grace_period` を書く前は `<nil>` = 何も決めていない = Docker の既定）
+
+**📖 しくみ**
+
+- **何をしているか**: worker の箱にだけ、「止めるときは 30 秒まで待つ」と決めました。
+- **なぜ必要か**: Celery が「いまの仕事を終えてから止まる」と頑張っても、Docker が先に強制終了すると意味がありません。**待つ長さを決めるのは Docker の側**です。
+- **どういう原理で動くか**:
+  1. **`docker compose up -d worker`** が、箱を作るときに「待つのは 30 秒」と箱の設定（`StopTimeout`）に書き込む
+  2. **`docker compose stop worker`** で、Docker が PID 1（celery）に SIGTERM を送る
+  3. **Celery** が仕事を終えて、自分で止まる → `Exited (0)`
+  4. 30 秒たっても止まらないときだけ、**Docker** が SIGKILL を送る
+
+> 📇 **stop_grace_period** — 正式名称: Compose の **`stop_grace_period`**
+> かみくだくと: 「止まって」と頼んでから、**力ずくで止めるまで待ってあげる時間**。
+> 似た言葉との違い: `docker stop -t 30` / `docker compose stop -t 30` = その1回だけ待つ時間を変える。`stop_grace_period` = 箱に書き込んでおくので、**毎回**その時間待つ。
+> この教材では: worker にだけ `30s`。api・db などは既定のまま。
+> 根拠: https://docs.docker.com/reference/compose-file/services/#stop_grace_period
+
+---
+
+### チャンク3: 一時的な2行を消して、元の速さに戻す（`apps/api/src/catalog/tasks.py`）— 後片付け
+
+**このチャンクの目的**: チャンク1 で足した `import time` と `time.sleep(15)` を消します。消し忘れると、サムネイル作りがずっと 15 秒かかります。
+
+**🤔 先に考える**: 仕事が**何も無い**ときに `docker compose stop worker` を打つと、30 秒待つと思いますか？
+A. 30 秒待つ（そう書いたから）　B. すぐ止まる
+
+理由も一言で（「分からない」でも大丈夫です）。ヒント: `stop_grace_period` は「**最大で**どこまで待つか」でしょうか、「**必ず**何秒待つか」でしょうか？
+
+<details><summary>答え</summary>
+
+**B（すぐ止まる）** です。30 秒は「**最大で**待つ時間」です。Celery が自分で止まれば、Docker はそれ以上待ちません。
+
+</details>
+
+**🎯 書くもの**: `tasks.py` から、チャンク1 で足した2行（`import time` と `time.sleep(15)`）を消す。`import time` の下の空行も消す。書く行はありません。
+
+<details><summary>答え合わせ（消したあとの、ファイルの上の方）</summary>
+
+```python
+from django.core.files.base import ContentFile
+from PIL import Image
+
+from catalog.models import Product
+from config.celery import app
+
+
+@app.task
+def make_thumbnail(product_id):
+    product = Product.objects.get(id=product_id)
+```
+
+`git diff apps/api/src/catalog/tasks.py` で**何も出なければ**、元どおりです。
+
+</details>
+
+**▶️ 確かめる**: worker を起動して（コードを読み直させるため）、仕事が無いまま止めます。
+
+```bash
+docker compose up -d worker
+time docker compose stop worker
+docker compose ps -a worker --format '{{.Status}}'
+docker compose start worker
+```
+
+```text
+docker compose stop worker  0.06s user 0.03s system 2% cpu 2.890 total
+Exited (0) Less than a second ago
+```
+
+✅ 検証済み: 2026-11-21
+
+約3秒で止まり、`Exited (0)` でした。30 秒は待たず、celery が**自分で**止まれた印です。最後に画像を1回送り、worker のログの `succeeded` が、また一瞬（`0.0...s`）に戻っていることを確かめます。
+
+**🔎 答えの見つけ方**: 「一時的に足したものを消し忘れていないか」は、`git diff` で見る。最後にコミットしたときとの違いだけが出る。
+
+**📖 しくみ**
+
+- **何をしているか**: 実験のために足した2行を消し、仕事を元の速さに戻しました。
+- **なぜ必要か**: 「待たせる」設定はそのまま残します。実験の仕掛けだけを外します。
+- **どういう原理で動くか**: 仕事が無ければ、Celery は SIGTERM を受けてすぐ片付けに入り、自分で止まります。Docker は、PID 1 が止まった時点で待つのをやめます。`stop_grace_period` が効くのは、**仕事が長引いたときだけ**です。
+
+---
+
+### 🧪 壊してみる
+
+worker の箱の **PID 1** を、celery 以外にすると、どうなるでしょう（P2-5 の答え合わせです）。
+
+1. **予想**: `compose.yaml` の worker の `command:` を、次の1行に**一時的に**書き換えます（シェル `sh` に celery を起動させる形）。そのあと `docker compose stop worker` は、何秒かかり、終了コードは何になると思いますか？
+
+   ```yaml
+           command: ["sh", "-c", ".venv/bin/celery --workdir src -A config worker --loglevel info"]
+   ```
+
+2. **実行**: 書き換えて、作り直してから止めます（仕事は送らなくて構いません）。
+
+   ```bash
+   docker compose up -d worker
+   docker compose exec worker sh -c 'cat /proc/1/cmdline | tr "\0" " "; echo'
+   time docker compose stop worker
+   docker compose ps -a worker --format '{{.Status}}'
+   docker compose logs --since 1m worker | tail -2
+   ```
+
+3. **見る**:
+
+   ```text
+   sh -c .venv/bin/celery --workdir src -A config worker --loglevel info
+   docker compose stop worker  0.05s user 0.02s system 0% cpu 30.240 total
+   Exited (137) Less than a second ago
+   ... mingle: all alone
+   ... celery@3bacf30a88f0 ready.
+   ```
+
+   ✅ 検証済み: Docker Engine 29.8.0 / Celery 5.6.3（2026-11-21）
+
+   | 見えたもの | 意味 |
+   | --- | --- |
+   | `sh -c ...` | PID 1 が **sh** になった。celery は sh の子ども |
+   | `30.240 total` | 仕事は何も無いのに、**30 秒まるごと**待たされた |
+   | `Exited (137)` | 最後は SIGKILL で殺された |
+   | ログに `Warm shutdown` が**無い** | SIGTERM は PID 1 の sh にだけ届き、**celery には届いていない** |
+
+   P2-5 で見たとおり、SIGTERM は **PID 1 にだけ**送られます。`sh` は SIGTERM の処理を用意していないので、何もしません。celery は合図を知らないまま、30 秒後に殺されます。そのとき仕事の途中だったら、チャンク1 と同じく**仕事が消えます**。いまの `command: [".venv/bin/celery", ...]` の形と、`entrypoint.sh` の `exec "$@"` があるから、celery が PID 1 になって合図を受け取れていました。
+
+4. **元に戻す**: `command:` を元の1行に戻し、`docker compose up -d worker` で作り直します。`docker compose exec worker sh -c 'cat /proc/1/cmdline | tr "\0" " "; echo'` が `/app/.venv/bin/python .venv/bin/celery ...` に戻れば OK です。
+
+> ⚠️ 元に戻し忘れると、worker を止めるたびに 30 秒待たされ、毎回強制終了になります。
+
+### 🐳 Docker の中の図（後）
+
+動く図のページ（`docs/visual/docker-inside.html`）の **「6h」** のボタンを押し、**worker の箱**をクリックしてみてください。右の説明に、今日 worker に足したこと（止めるとき最大 30 秒待つ）が出ます。
+
+> 🗺️ 全体の地図（`docs/02-system-map.md`）の「1枚の地図」「🔎 調べ方の地図」「つまずきメモ」にも、今日の分を書き足しました。
+
+### ✏️ 自分で地図を描く
+
+冒頭の 🗺️ 今日の地図を**見ずに**、`＿＿＿` を埋めてみてください。各行の右に「なぜ」を一言ずつ書くのがポイントです。
+
+```text
+あなた：docker compose stop worker
+        │
+        ▼
+Docker：worker の箱の PID ＿ に ＿＿＿＿＿＿（止まってください）を送る
+        │   なぜ PID 1 が celery でないといけない？: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+        ▼
+Celery：新しいメモは取らない。いまの仕事を終えてから止まる（＿＿＿＿ shutdown）
+        │
+        ▼
+Docker：待つのは ＿＿＿＿＿＿＿＿＿＿＿＿＿ まで。過ぎたら ＿＿＿＿＿＿（強制終了）
+        │   反映に restart ではなく up -d が要るのは: ＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿＿
+        ▼
+仕事が終わった → Exited (＿)   ／   間に合わなかった → Exited (＿＿＿)・仕事は ＿＿＿
+```
+
+<details><summary>答え合わせ</summary>
+
+```text
+あなた：docker compose stop worker
+        │
+        ▼
+Docker：worker の箱の PID 1 に SIGTERM（止まってください）を送る
+        │   なぜ PID 1 が celery でないといけない？: SIGTERM は PID 1 にしか届かないから（sh だと celery に届かない）
+        ▼
+Celery：新しいメモは取らない。いまの仕事を終えてから止まる（Warm shutdown）
+        │
+        ▼
+Docker：待つのは stop_grace_period まで。過ぎたら SIGKILL（強制終了）
+        │   反映に restart ではなく up -d が要るのは: 待つ時間は箱を作るときに書き込む設定だから
+        ▼
+仕事が終わった → Exited (0)   ／   間に合わなかった → Exited (137)・仕事は 消える
+```
+
+「なぜ」は、言い方がちがっても、意味が合っていれば正解です。埋められなかった所があれば、そのチャンクの 📖 しくみ だけ読み返します。最後に、動く図のページの「6h」と見比べます。
+
+</details>
+
+### 📝 ひとこと
+
+「〜だと思っていたけど、実は〜」を1行書きます。書いたものは `docs/notes.md` に貯めます。うまく書けなければ、書かずに先へ進んでも大丈夫です。
+
+例: 「`docker compose stop` は、仕事が終わるまで待ってくれると思っていたけど、実は数秒で強制終了していた」
+
+### ✅ できるようになったこと
+
+- [ ] `Exited (0)` と `Exited (137)` を見て、worker が自分で止まれたか、時間切れで殺されたかを言える
+- [ ] 仕事の途中で殺されると、メモが受付箱に戻らず仕事が消える理由を説明できる
+- [ ] `stop_grace_period` を変えたとき、`restart` ではなく `up -d` が要ることを、打つ前に言える
+- [ ] `tasks.py` から `time.sleep(15)` を消した（`git diff apps/api/src/catalog/tasks.py` で何も出ない）
+
+---
+
+## P4-6 全体のふりかえり
+
+6a〜6h の8回で、「画像を送ると、別の箱がサムネイルを作り、画面に出る」までが全部つながりました。
+
+```text
+⑥c api が画像を受け取り、倉庫 media に保存する（db には場所だけ）
+   ⑥d 倉庫 media を api と worker で分け合う
+⑥e api が受付箱（Redis の 1番の部屋。⑥a で場所を教えた）にメモを入れる
+⑥b worker（api と同じイメージ。command: だけ違う）がメモを取り出す
+⑥f worker が db と倉庫から材料を集め、サムネイルを作って倉庫に置く
+⑥g ブラウザ → web（中継）→ api → 倉庫 の道で、画面にサムネイルが出る
+⑥h worker を止めるときは、仕事が終わるまで待たせる
+```
+
+**やってみてください**: 動く図のページ（`docs/visual/docker-inside.html`）で、**「P4-5」から「6h」まで、ボタンを順番に押して**みてください。箱・道・倉庫・矢印が1つずつ増えていくのが見えます。いちばん下の「成長の記録」と「🔎 調べ方の地図」にも、ここまでの分が並んでいます。
+
+---
+▶ **次**: PJ2 Multi-Container Application（このあとの「▶ ここで PJ2 に取り組む」から）
 
 ---
 
@@ -5425,7 +5972,13 @@ api の箱（Django）
       ↓ 増える設定を、どこに置くのか
   → 値は .env へ。渡る形は docker compose config で見る
       ↓ 重い処理を、別の箱に任せられるのか
-  → 同じイメージを command: で worker にし、volume で画像を共有する
+  → 受付箱（Redis の 1番の部屋）にメモを入れ、同じイメージを command: で worker にする（P4-6a・6b・6e）
+      ↓ 画像を、api と worker でどう分け合うのか
+  → 名前付きの倉庫 media を両方につなぐ。コードは Mac のフォルダ、データは倉庫（P4-6c・6d・6f）
+      ↓ ブラウザから、倉庫の画像にどうたどり着くのか
+  → ブラウザは Docker の道の外にいる。道 front の web に /media も中継させる（P4-6g）
+      ↓ 仕事の途中で worker を止めたら、どうなるのか
+  → PID 1 の celery が SIGTERM を受けて待つ。stop_grace_period で Docker にも待たせる（P4-6h）
       ↓ では、この重いイメージをどう軽くするのか
 ```
 
@@ -5433,7 +5986,7 @@ api の箱（Django）
 
 ## ▶ ここで PJ2 に取り組む
 
-P4 の6ステップはここまで。**次は自分で組む番**です。
+P4 の6ステップ（P4-6 は 6a〜6h の8回）はここまで。**次は自分で組む番**です。
 
 **前提チェック**（すべて ✅ なら着手してよい）
 
@@ -5441,6 +5994,9 @@ P4 の6ステップはここまで。**次は自分で組む番**です。
 - [ ] `down` と `down -v` の違いを説明できる（P4-2）
 - [ ] `depends_on` だけでは DB の準備を待てない理由を説明できる（P4-3）
 - [ ] `docker compose exec` と `docker compose config` で、コンテナと設定を確かめられる（P4-4、P4-5）
+- [ ] `compose.yaml` や `.env` を変えたとき、箱に届けるのに「何もしない／`restart`／`up -d`／`up -d --build`」のどれが要るかを言える（P4-5、P4-6d・6g・6h）
+- [ ] 箱が止まった・つながらないとき、`docker compose ps -a` の `Exited (数字)` と `docker compose logs` の最後の行から、原因を探せる（P4-6b〜6h）
+- [ ] サービス名で呼び合えるのは同じ道（network）にいる箱どうしだけで、Mac やブラウザからは窓口（`ports:`）を通ることを説明できる（P4-6b、P4-6g）
 
 1つでも ✅ にできない項目があれば、**該当ステップの 🔬 仕組み解剖だけ**読み返してから着手します。
 
@@ -5828,7 +6384,7 @@ docker compose down -v --rmi local
 
 1. `db` の `healthcheck` と、`api` の `depends_on` の `condition`
 2. いちばん外の `volumes:` と `networks:`
-3. `worker` の `command:`
+3. `worker` の `command:`・`volumes:`（倉庫 `media`）・`stop_grace_period:`
 4. `web` の `develop.watch`
 
 **翌日に行うことをすすめます。** 直後は短期記憶で再現できてしまい、定着の負荷が足りません。

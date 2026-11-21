@@ -24,6 +24,7 @@ Redis Insight ── :6379 Mac だけ     ──▶ redis   倉庫なし（作�
                                                 0番の部屋: カート / 1番の部屋: 受付箱
 （窓口なし）                            worker ──▶ redis の 1番を見張り、メモが来たら仕事をする
                                         worker ──▶ db（商品を読む・サムネイルの場所を書く。P4-6f で追加）
+                                        worker を止めるときは、仕事が終わるまで最大 30 秒待つ（stop_grace_period。P4-6h で追加）
                                         api・worker ──▶ 倉庫 media（画像。消えない。P4-6d で追加）
                                                         products/ = 元の画像（api が書く）、thumbs/ = サムネイル（worker が書く。P4-6f）
 ```
@@ -97,6 +98,9 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | ブラウザが画像を取りに行く先で、画像が返るか | `curl -s -I localhost:5173/media/thumbs/1.jpg`（`Content-Type: image/jpeg` なら OK。`text/html` なら web が中継していない） |
 | api の箱が画像を返せるか | `curl -s -I localhost:8000/media/thumbs/1.jpg`（`404` なら `urls.py` の `static()` か `DEBUG` を見る） |
 | Django がその URL をどう扱ったか | `docker compose logs --since 1m api \| grep media`（行の最後の数字 `200` / `404`） |
+| 箱がどう止まったか | `docker compose ps -a <サービス名> --format '{{.Status}}'`（`Exited (0)` = 自分で止まれた、`Exited (137)` = 時間切れで SIGKILL） |
+| 止めるとき何秒待つ設定か | `docker inspect roadmap-sh-docker-worker-1 --format '{{.Config.StopTimeout}}'`（`<nil>` なら Docker の既定。この Mac では約3秒、公式は 10 秒） |
+| 箱の中の PID 1 は何か | `docker compose exec <サービス名> sh -c 'cat /proc/1/cmdline \| tr "\0" " "; echo'`（止める合図 SIGTERM は PID 1 にだけ届く） |
 | 箱の中のファイルを Mac で見る | `docker compose cp api:/app/media/thumbs/1.jpg /tmp/thumb.jpg` → `open /tmp/thumb.jpg` |
 
 ## つまずきメモ
@@ -111,3 +115,5 @@ worker の `8000/tcp` は、イメージの中のメモ（`EXPOSE`）が見え�
 | 画像の `<img>` が出ない。`localhost:5173/media/...` が `200` なのに `text/html` | web の箱の Vite が `/media` を中継していない。自分の画面の HTML を返している | `vite.config.js` の `proxy` に `"/media": "http://api:8000"` を足し、`docker compose up -d --build web` |
 | `vite.config.js` を変えたのに効かない（restart してもだめ） | `vite.config.js` はイメージを作るときに `COPY` で写し取ったもの。`watch` も `src/` しか同期しない | `docker compose up -d --build web` でイメージから作り直す |
 | `<img src="http://api:8000/...">` の画像が出ない | React はブラウザ（Mac）で動く。Mac は Docker の道にいないので `api` を知らない（`Could not resolve host: api`） | 住所は `/media/...` にして、web に中継させる |
+| 画像はあるのにサムネイルが無い（ログにエラーも無い） | 仕事の途中で worker を止めた（作り直した）。Docker が待ちきれず SIGKILL した。メモは仕事を始めた時点で受付箱から消えているので、戻らない | worker に `stop_grace_period: 30s`。`docker compose ps -a worker` が `Exited (137)` なら、時間切れで殺された印 |
+| worker を止めると毎回 30 秒かかり `Exited (137)` | PID 1 が celery ではない（例: `command: ["sh", "-c", "..."]`）。SIGTERM が sh にだけ届き、celery に届かない | `command:` は `[".venv/bin/celery", ...]` の配列で書き、`entrypoint.sh` は `exec "$@"`（P2-5） |
