@@ -24,4 +24,4 @@ REDIS_URL = os.environ["REDIS_URL"]
 CELERY_BROKER_URL = os.environ["BROKER_URL"]
 
 MEDIA_ROOT = "/app/media"
-
+MEDIA_URL = "/media/"

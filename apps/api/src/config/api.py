@@ -1,7 +1,7 @@
 import redis
 from django.conf import settings
 from django.shortcuts import get_object_or_404
-from ninja import File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
+from ninja import Field, File, Header, ModelSchema, NinjaAPI, Schema, UploadedFile
 
 from catalog.models import Product
 from catalog.tasks import make_thumbnail
@@ -11,6 +11,8 @@ cart_store = redis.Redis.from_url(settings.REDIS_URL, decode_responses=True)
 
 
 class ProductOut(ModelSchema):
+    thumbnail_url: str | None = Field(None, alias="thumbnail")
+
     class Meta:
         model = Product
         fields = ["id", "name", "price", "description"]

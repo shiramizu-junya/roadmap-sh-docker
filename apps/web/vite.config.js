@@ -7,6 +7,7 @@ export default defineConfig({
         proxy: {
             // /api で始まるリクエストを、api サービスへ中継する
             "/api": "http://api:8000",
+            "/media": "http://api:8000",
         },
     },
 });
