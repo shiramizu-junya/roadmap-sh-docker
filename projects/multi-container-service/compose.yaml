@@ -3,5 +3,23 @@ services:
         build: "."
         ports:
             - "3000:8000"
+        depends_on:
+            db:
+                condition: service_healthy
         volumes:
             - "./src:/app/src"
+
+    db:
+        image: mysql:8.4
+        env_file:
+            - ./db.env
+        healthcheck:
+            test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+            interval: 2s
+            timeout: 5s
+            retries: 30
+        volumes:
+            - db-data:/var/lib/mysql
+
+volumes:
+    db-data:
