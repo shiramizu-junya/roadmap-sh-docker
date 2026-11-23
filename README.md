@@ -23,3 +23,9 @@
 | P5 | サイズ削減 / マルチステージ | 4 | — | 未着手 |
 | P6 | 本番構成 / セキュリティ / 運用 | 4 | PJ3 | 未着手 |
 | P7 | レジストリ / CI/CD / デプロイ | 4 | PJ4（任意） | 未着手 |
+
+### プロジェクト
+
+| PJ | 置き場所 | 状態 |
+| --- | --- | --- |
+| PJ2 Multi-Container Application | [`projects/multi-container-service/`](projects/multi-container-service/) | 完了（2026-11-23）。判定基準 1〜5 を確認済み、任意の 6 は未確認 |
