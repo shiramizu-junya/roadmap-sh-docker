@@ -26,6 +26,6 @@
 
 ### プロジェクト
 
-| PJ | 置き場所 | 状態 |
-| --- | --- | --- |
-| PJ2 Multi-Container Application | [`projects/multi-container-service/`](projects/multi-container-service/) | 完了（2026-11-23）。判定基準 1〜5 を確認済み、任意の 6 は未確認 |
+| PJ | 課題 | 置き場所 | 状態 |
+| --- | --- | --- | --- |
+| PJ2 Multi-Container Application | https://roadmap.sh/projects/multi-container-service | [`projects/multi-container-service/`](projects/multi-container-service/) | 完了（2026-11-23）。判定基準 1〜5 を確認済み、任意の 6 は未確認 |
